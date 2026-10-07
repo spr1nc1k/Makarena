@@ -293,13 +293,13 @@ struct FeatureMenuView: View {
 
                 Section(header: Text("Szybkie Zakładki")) {
                     Link(destination: URL(string: "https://www.testportal.pl")!) {
-                        Label("Testportal.pl", systemName: "checkmark.shield.fill")
+                        Label("Testportal.pl", systemImage: "checkmark.shield.fill")
                     }
                     Link(destination: URL(string: "https://www.google.com")!) {
-                        Label("Google Search", systemName: "magnifyingglass")
+                        Label("Google Search", systemImage: "magnifyingglass")
                     }
                     Link(destination: URL(string: "https://chatgpt.com")!) {
-                        Label("ChatGPT Portal", systemName: "cpu")
+                        Label("ChatGPT Portal", systemImage: "cpu")
                     }
                 }
             }
