@@ -56,11 +56,11 @@
 				A100000E2C00000100000000 /* testportal_bypass.js */,
 				A10000102C00000100000000 /* ai_injector.js */,
 				A10000112C00000100000000 /* Info.plist */,
-				A10000002C00000100000000 /* Products */,
+				A10000992C00000100000000 /* Products */,
 			);
 			sourceTree = "<group>";
 		};
-		A10000002C00000100000000 /* Products */ = {
+		A10000992C00000100000000 /* Products */ = {
 			isa = PBXGroup;
 			children = (
 				A10000002C00000100000000 /* Makarena.app */,
@@ -112,7 +112,7 @@
 				Base,
 			);
 			mainGroup = A10000132C00000100000000;
-			productRefGroup = A10000002C00000100000000 /* Products */;
+			productRefGroup = A10000992C00000100000000 /* Products */;
 			projectDirPath = "";
 			projectRoot = "";
 			targets = (
