@@ -1,0 +1,7 @@
+gemini.md
+plan.md
+.DS_Store
+build/
+DerivedData/
+*.xcworkspace
+xcuserdata/

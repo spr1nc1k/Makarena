@@ -1,0 +1,249 @@
+// !$*UTF8*$!
+{
+	archiveVersion = 1;
+	classes = {
+	};
+	objectVersion = 56;
+	objects = {
+
+/* Begin PBXBuildFile section */
+		A10000012C00000100000000 /* MakarenaApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10000022C00000100000000 /* MakarenaApp.swift */; };
+		A10000032C00000100000000 /* ContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10000042C00000100000000 /* ContentView.swift */; };
+		A10000052C00000100000000 /* SettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10000062C00000100000000 /* SettingsView.swift */; };
+		A10000072C00000100000000 /* StealthWebView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10000082C00000100000000 /* StealthWebView.swift */; };
+		A10000092C00000100000000 /* AIService.swift in Sources */ = {isa = PBXBuildFile; fileRef = A100000A2C00000100000000 /* AIService.swift */; };
+		A100000B2C00000100000000 /* VolumeKeyObserver.swift in Sources */ = {isa = PBXBuildFile; fileRef = A100000C2C00000100000000 /* VolumeKeyObserver.swift */; };
+		A10000202C00000100000000 /* UpdateService.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10000212C00000100000000 /* UpdateService.swift */; };
+		A100000D2C00000100000000 /* testportal_bypass.js in Resources */ = {isa = PBXBuildFile; fileRef = A100000E2C00000100000000 /* testportal_bypass.js */; };
+		A100000F2C00000100000000 /* ai_injector.js in Resources */ = {isa = PBXBuildFile; fileRef = A10000102C00000100000000 /* ai_injector.js */; };
+/* End PBXBuildFile section */
+
+/* Begin PBXFileReference section */
+		A10000002C00000100000000 /* Makarena.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Makarena.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		A10000022C00000100000000 /* MakarenaApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MakarenaApp.swift; sourceTree = "<group>"; };
+		A10000042C00000100000000 /* ContentView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Views/ContentView.swift; sourceTree = "<group>"; };
+		A10000062C00000100000000 /* SettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Views/SettingsView.swift; sourceTree = "<group>"; };
+		A10000082C00000100000000 /* StealthWebView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WebView/StealthWebView.swift; sourceTree = "<group>"; };
+		A100000A2C00000100000000 /* AIService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Services/AIService.swift; sourceTree = "<group>"; };
+		A100000C2C00000100000000 /* VolumeKeyObserver.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Services/VolumeKeyObserver.swift; sourceTree = "<group>"; };
+		A10000212C00000100000000 /* UpdateService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Services/UpdateService.swift; sourceTree = "<group>"; };
+		A100000E2C00000100000000 /* testportal_bypass.js */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.javascript; path = Scripts/testportal_bypass.js; sourceTree = "<group>"; };
+		A10000102C00000100000000 /* ai_injector.js */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.javascript; path = Scripts/ai_injector.js; sourceTree = "<group>"; };
+		A10000112C00000100000000 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
+/* End PBXFileReference section */
+
+/* Begin PBXFrameworksBuildPhase section */
+		A10000122C00000100000000 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXFrameworksBuildPhase section */
+
+/* Begin PBXGroup section */
+		A10000132C00000100000000 = {
+			isa = PBXGroup;
+			children = (
+				A10000022C00000100000000 /* MakarenaApp.swift */,
+				A10000042C00000100000000 /* ContentView.swift */,
+				A10000062C00000100000000 /* SettingsView.swift */,
+				A10000082C00000100000000 /* StealthWebView.swift */,
+				A100000A2C00000100000000 /* AIService.swift */,
+				A100000C2C00000100000000 /* VolumeKeyObserver.swift */,
+				A10000212C00000100000000 /* UpdateService.swift */,
+				A100000E2C00000100000000 /* testportal_bypass.js */,
+				A10000102C00000100000000 /* ai_injector.js */,
+				A10000112C00000100000000 /* Info.plist */,
+				A10000002C00000100000000 /* Products */,
+			);
+			sourceTree = "<group>";
+		};
+		A10000002C00000100000000 /* Products */ = {
+			isa = PBXGroup;
+			children = (
+				A10000002C00000100000000 /* Makarena.app */,
+			);
+			name = Products;
+			sourceTree = "<group>";
+		};
+/* End PBXGroup section */
+
+/* Begin PBXNativeTarget section */
+		A10000142C00000100000000 /* Makarena */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = A10000172C00000100000000 /* Build configuration list for PBXNativeTarget "Makarena" */;
+			buildPhases = (
+				A10000152C00000100000000 /* Sources */,
+				A10000122C00000100000000 /* Frameworks */,
+				A10000162C00000100000000 /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			name = Makarena;
+			productName = Makarena;
+			productReference = A10000002C00000100000000 /* Makarena.app */;
+			productType = "com.apple.product-type.application";
+		};
+/* End PBXNativeTarget section */
+
+/* Begin PBXProject section */
+		A10000182C00000100000000 /* Project object */ = {
+			isa = PBXProject;
+			attributes = {
+				BuildIndependentTargetsInParallel = 1;
+				LastSwiftUpdateCheck = 1500;
+				LastUpgradeCheck = 1500;
+				TargetAttributes = {
+					A10000142C00000100000000 = {
+						CreatedOnToolsVersion = 15.0;
+					};
+				};
+			};
+			buildConfigurationList = A100001B2C00000100000000 /* Build configuration list for PBXProject "Makarena" */;
+			compatibilityVersion = "Xcode 14.0";
+			developmentRegion = en;
+			hasScannedForEncodings = 0;
+			knownRegions = (
+				en,
+				Base,
+			);
+			mainGroup = A10000132C00000100000000;
+			productRefGroup = A10000002C00000100000000 /* Products */;
+			projectDirPath = "";
+			projectRoot = "";
+			targets = (
+				A10000142C00000100000000 /* Makarena */,
+			);
+		};
+/* End PBXProject section */
+
+/* Begin PBXResourcesBuildPhase section */
+		A10000162C00000100000000 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				A100000D2C00000100000000 /* testportal_bypass.js in Resources */,
+				A100000F2C00000100000000 /* ai_injector.js in Resources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXResourcesBuildPhase section */
+
+/* Begin PBXSourcesBuildPhase section */
+		A10000152C00000100000000 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				A10000012C00000100000000 /* MakarenaApp.swift in Sources */,
+				A10000032C00000100000000 /* ContentView.swift in Sources */,
+				A10000052C00000100000000 /* SettingsView.swift in Sources */,
+				A10000072C00000100000000 /* StealthWebView.swift in Sources */,
+				A10000092C00000100000000 /* AIService.swift in Sources */,
+				A100000B2C00000100000000 /* VolumeKeyObserver.swift in Sources */,
+				A10000202C00000100000000 /* UpdateService.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXSourcesBuildPhase section */
+
+/* Begin XCBuildConfiguration section */
+		A100001C2C00000100000000 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				CLANG_ANALYZER_NONNULL = YES;
+				CLANG_CXX_LANGUAGE_STANDARD = "gnu++20";
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				COPY_PHASE_STRIP = NO;
+				DEBUG_INFORMATION_FORMAT = dwarf;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				ENABLE_TESTABILITY = YES;
+				GCC_DYNAMIC_NO_PIC = NO;
+				GCC_NO_COMMON_BLOCKS = YES;
+				GCC_OPTIMIZATION_LEVEL = 0;
+				GCC_PREPROCESSOR_DEFINITIONS = (
+					"DEBUG=1",
+					"$(inherited)",
+				);
+				INFOPLIST_FILE = Info.plist;
+				IPHONEOS_DEPLOYMENT_TARGET = 15.0;
+				MTL_ENABLE_DEBUG_INFO = INCLUDE_SOURCE;
+				ONLY_ACTIVE_ARCH = YES;
+				PRODUCT_BUNDLE_IDENTIFIER = com.makarena.browser;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SWIFT_ACTIVE_COMPILATION_CONDITIONS = DEBUG;
+				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Debug;
+		};
+		A100001D2C00000100000000 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				CLANG_ANALYZER_NONNULL = YES;
+				CLANG_CXX_LANGUAGE_STANDARD = "gnu++20";
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				COPY_PHASE_STRIP = NO;
+				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
+				ENABLE_NS_ASSERTIONS = NO;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				GCC_NO_COMMON_BLOCKS = YES;
+				INFOPLIST_FILE = Info.plist;
+				IPHONEOS_DEPLOYMENT_TARGET = 15.0;
+				MTL_FAST_MATH = YES;
+				PRODUCT_BUNDLE_IDENTIFIER = com.makarena.browser;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SWIFT_COMPILATION_MODE = wholemodule;
+				SWIFT_OPTIMIZATION_LEVEL = "-O";
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Release;
+		};
+		A100001E2C00000100000000 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				SDKROOT = iphoneos;
+			};
+			name = Debug;
+		};
+		A100001F2C00000100000000 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				SDKROOT = iphoneos;
+			};
+			name = Release;
+		};
+/* End XCBuildConfiguration section */
+
+/* Begin XCConfigurationList section */
+		A10000172C00000100000000 /* Build configuration list for PBXNativeTarget "Makarena" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				A100001C2C00000100000000 /* Debug */,
+				A100001D2C00000100000000 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		A100001B2C00000100000000 /* Build configuration list for PBXProject "Makarena" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				A100001E2C00000100000000 /* Debug */,
+				A100001F2C00000100000000 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+/* End XCConfigurationList section */
+	};
+	rootObject = A10000182C00000100000000 /* Project object */;
+}
