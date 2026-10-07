@@ -7,32 +7,27 @@ on:
 
 jobs:
   build:
-    runs-on: macos-14
+    runs-on: macos-latest
     steps:
       - name: Checkout Code
         uses: actions/checkout@v4
 
-      - name: Set up Xcode
-        uses: maxim-lobanov/setup-xcode@v1
-        with:
-          xcode-version: '15.4'
-
-      - name: Build iOS App (.app)
+      - name: Build iOS App Bundle
         run: |
-          xcodebuild build \
+          xcodebuild archive \
             -project Makarena.xcodeproj \
             -scheme Makarena \
             -sdk iphoneos \
+            -archivePath build/Makarena.xcarchive \
             -configuration Release \
             CODE_SIGN_IDENTITY="" \
             CODE_SIGNING_REQUIRED=NO \
-            CODE_SIGNING_ALLOWED=NO \
-            BUILD_DIR=build
+            CODE_SIGNING_ALLOWED=NO
 
       - name: Create IPA Package
         run: |
           mkdir -p Payload
-          cp -r build/Release-iphoneos/Makarena.app Payload/
+          cp -r build/Makarena.xcarchive/Products/Applications/Makarena.app Payload/
           zip -r Makarena.ipa Payload
 
       - name: Upload IPA Artifact
