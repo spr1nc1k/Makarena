@@ -3,7 +3,7 @@ import SwiftUI
 struct SettingsView: View {
     @Environment(\.dismiss) var dismiss
     @AppStorage("gemini_api_key") private var apiKey: String = ""
-    @AppStorage("api_provider") private var selectedProvider: String = AIService.APIProvider.gemini.rawValue
+    @AppStorage("api_provider") private var selectedProvider: String = AIService.APIProvider.autoFreePool.rawValue
 
     @StateObject private var updateService = UpdateService.shared
     @State private var serverURLInput: String = UpdateService.shared.serverURL
@@ -11,20 +11,25 @@ struct SettingsView: View {
     var body: some View {
         NavigationView {
             Form {
-                Section(header: Text("Darmowe API AI")) {
+                Section(header: Text("Darmowe Silniki AI (12 Dostawców)")) {
                     Picker("Dostawca AI", selection: $selectedProvider) {
                         ForEach(AIService.APIProvider.allCases) { provider in
                             Text(provider.rawValue).tag(provider.rawValue)
                         }
                     }
                     
-                    SecureField("Wprowadź Klucz API", text: $apiKey)
-                        .autocapitalization(.none)
-                        .disableAutocorrection(true)
-                    
-                    Link("Pobierz darmowy klucz Gemini API (Google AI Studio)", destination: URL(string: "https://aistudio.google.com/app/apikey")!)
-                        .font(.footnote)
-                        .foregroundColor(.blue)
+                    if selectedProvider != AIService.APIProvider.autoFreePool.rawValue &&
+                       selectedProvider != AIService.APIProvider.pollinations.rawValue &&
+                       selectedProvider != AIService.APIProvider.llm7.rawValue &&
+                       selectedProvider != AIService.APIProvider.ovh.rawValue {
+                        SecureField("Wprowadź swój Klucz API", text: $apiKey)
+                            .autocapitalization(.none)
+                            .disableAutocorrection(true)
+                    } else {
+                        Text("✅ W wybranym trybie AI działa 100% darmowo i bez rejestracji!")
+                            .font(.caption)
+                            .foregroundColor(.green)
+                    }
                 }
 
                 Section(header: Text("Automatyczne Aktualizacje")) {

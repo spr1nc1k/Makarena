@@ -96,9 +96,17 @@ struct StealthWebView: UIViewRepresentable {
     }
 
     func makeUIView(context: Context) -> WKWebView {
-        // Konfiguracja Autentycznego iOS Safari User-Agent (Zapobiega blokadzie "niekompatybilna przeglądarka")
+        // Autentyczny User-Agent iOS 17.5 Safari
         webView.customUserAgent = "Mozilla/5.0 (iPhone; CPU iPhone OS 17_5 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.5 Mobile/15E148 Safari/605.1.15"
         
+        // Zapewnienie pełnej obsługi Ciasteczek, LocalStorage i Pamięci Przeglądarki
+        let config = webView.configuration
+        config.websiteDataStore = WKWebsiteDataStore.default()
+        let webpagePrefs = WKWebpagePreferences()
+        webpagePrefs.allowsContentJavaScript = true
+        config.defaultWebpagePreferences = webpagePrefs
+        config.preferences.javaScriptCanOpenWindowsAutomatically = true
+
         webView.navigationDelegate = context.coordinator
 
         // Konfiguracja skryptów wstrzykiwanych
