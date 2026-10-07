@@ -11,6 +11,8 @@ struct ContentView: View {
     @State private var showFeatureMenu: Bool = false
     
     @StateObject private var volumeObserver = VolumeKeyObserver.shared
+    @AppStorage("gemini_api_key") private var apiKey: String = ""
+
     public enum NotificationState {
         case activatedAI
         case deactivatedPanic
