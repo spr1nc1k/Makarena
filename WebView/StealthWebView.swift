@@ -148,12 +148,16 @@ struct StealthWebView: UIViewRepresentable {
     public static func triggerAIAnalysis(webView: WKWebView) {
         let js = """
         (function() {
-            window.MakarenaAI.disablePanicMode();
-            var data = window.MakarenaAI.extractQuestionData();
-            window.webkit.messageHandlers.MakarenaHandler.postMessage({
-                action: 'questionDataExtracted',
-                data: data
-            });
+            if (window.MakarenaAI) {
+                window.MakarenaAI.disablePanicMode();
+                var data = window.MakarenaAI.extractQuestionData();
+                if (window.__makarenaSend) {
+                    window.__makarenaSend({
+                        action: 'questionDataExtracted',
+                        data: data
+                    });
+                }
+            }
         })();
         """
         webView.evaluateJavaScript(js, completionHandler: nil)
