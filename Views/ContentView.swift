@@ -11,8 +11,13 @@ struct ContentView: View {
     @State private var showFeatureMenu: Bool = false
     
     @StateObject private var volumeObserver = VolumeKeyObserver.shared
-    @AppStorage("gemini_api_key") private var apiKey: String = ""
-
+    public enum NotificationState {
+        case activatedAI
+        case deactivatedPanic
+    }
+    
+    @State private var activeNotification: NotificationState? = nil
+    
     private var activeTab: WebTab? {
         tabs.first(where: { $0.id == activeTabId }) ?? tabs.first
     }
@@ -131,7 +136,7 @@ struct ContentView: View {
             Divider()
 
             // Główny Widok Przeglądarki
-            ZStack(alignment: .top) {
+            ZStack(alignment: .topTrailing) {
                 if let tab = activeTab {
                     StealthWebView(
                         urlString: Binding(
@@ -151,20 +156,24 @@ struct ContentView: View {
                     .id(tab.id)
                 }
 
-                // Dyskretny pasek stanu na samej górze strony
-                if let tab = activeTab {
-                    HStack {
+                // Dyskretne Powiadomienie w Prawym Górnym Rogu (Kropka Zielona/Czerwona na 1.2 sekundy)
+                if let notification = activeNotification {
+                    HStack(spacing: 6) {
                         Circle()
-                            .fill(Color.green)
-                            .frame(width: 6, height: 6)
-                        Text(tab.statusMessage)
-                            .font(.system(size: 10, weight: .regular, design: .monospaced))
-                            .foregroundColor(.gray.opacity(0.8))
-                        Spacer()
+                            .fill(notification == .activatedAI ? Color.green : Color.red)
+                            .frame(width: 8, height: 8)
+                            .shadow(color: (notification == .activatedAI ? Color.green : Color.red).opacity(0.8), radius: 4)
+                        Text(notification == .activatedAI ? "AI Aktywowane" : "Tryb Nauczyciel")
+                            .font(.system(size: 10, weight: .bold, design: .rounded))
+                            .foregroundColor(.white)
                     }
-                    .padding(.horizontal, 12)
-                    .padding(.vertical, 3)
-                    .background(Color.black.opacity(0.04))
+                    .padding(.horizontal, 10)
+                    .padding(.vertical, 5)
+                    .background(Color.black.opacity(0.85))
+                    .cornerRadius(12)
+                    .padding(.top, 10)
+                    .padding(.trailing, 10)
+                    .transition(.scale.combined(with: .opacity))
                     .allowsHitTesting(false)
                 }
             }
@@ -231,6 +240,7 @@ struct ContentView: View {
 
     private func triggerAIAnalysis() {
         UIImpactFeedbackGenerator(style: .light).impactOccurred()
+        showNotification(.activatedAI)
         if let tab = activeTab {
             tab.statusMessage = "Wywoływanie AI..."
             StealthWebView.triggerAIAnalysis(webView: tab.webView)
@@ -239,9 +249,23 @@ struct ContentView: View {
 
     private func triggerPanicMode() {
         UINotificationFeedbackGenerator().notificationOccurred(.warning)
+        showNotification(.deactivatedPanic)
         if let tab = activeTab {
             tab.statusMessage = "TRYB NAUCZYCIEL PATRZY"
             StealthWebView.triggerPanicMode(webView: tab.webView)
+        }
+    }
+
+    private func showNotification(_ state: NotificationState) {
+        withAnimation(.spring()) {
+            activeNotification = state
+        }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 1.2) {
+            withAnimation(.easeInOut) {
+                if activeNotification == state {
+                    activeNotification = nil
+                }
+            }
         }
     }
 }

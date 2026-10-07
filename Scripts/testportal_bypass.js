@@ -1,48 +1,10 @@
 // testportal_bypass.js
-// Niewykrywalny silnik stealth dla Testportal (bypasowanie detekcji window.webkit, prototype i wtyczek)
+// Najnowocześniejszy silnik stealth z obsługą zdarzeń e.isTrusted (przechodzi testy syntetyczne Testportal)
 
 (function() {
     'use strict';
 
-    // 1. Zapisanie oryginalnego komunikatora WKWebView do zmiennej lokalnej (closure) i ukrycie webkit
-    let nativePostMessage = null;
-    try {
-        if (window.webkit && window.webkit.messageHandlers && window.webkit.messageHandlers.MakarenaHandler) {
-            const handler = window.webkit.messageHandlers.MakarenaHandler;
-            nativePostMessage = handler.postMessage.bind(handler);
-        }
-    } catch(e) {}
-
-    // Udostępniamy bezpieczną metodę wysyłania komunikatów bez śladu na obiekcie window
-    window.__makarenaSend = function(data) {
-        if (nativePostMessage) {
-            nativePostMessage(data);
-        }
-    };
-    try {
-        Object.defineProperty(window, '__makarenaSend', { enumerable: false, writable: false });
-    } catch(e) {}
-
-    // Usunięcie lub ukrycie obietnicy window.webkit przed skanerem Testportal
-    try {
-        delete window.webkit;
-    } catch(e) {
-        try { window.webkit = undefined; } catch(err) {}
-    }
-
-    // 2. Dodanie fabrycznego obiektu window.safari (wymagany przez Testportal na iOS)
-    if (!window.safari) {
-        try {
-            Object.defineProperty(window, 'safari', {
-                value: { pushNotification: {} },
-                writable: false,
-                configurable: true,
-                enumerable: true
-            });
-        } catch(e) {}
-    }
-
-    // 3. System maskowania funkcji JavaScript (Native toString Spoofing)
+    // 1. Bezpieczna obsługa Native toString Spoofing
     const nativeToString = Function.prototype.toString;
     const modifiedFunctions = new WeakSet();
 
@@ -61,7 +23,19 @@
         return nativeToString.call(this);
     }, 'toString');
 
-    // 4. Modyfikacja na poziomie PROTOTYPU (nie na obiekcie instance!), zapobiega wykryciu getOwnPropertyDescriptor
+    // 2. Dodanie fabrycznego obiektu window.safari
+    if (!window.safari) {
+        try {
+            Object.defineProperty(window, 'safari', {
+                value: { pushNotification: {} },
+                writable: false,
+                configurable: true,
+                enumerable: true
+            });
+        } catch(e) {}
+    }
+
+    // 3. Modyfikacja na poziomie PROTOTYPU (Document.prototype)
     try {
         Object.defineProperty(Document.prototype, 'visibilityState', {
             get: markAsNative(function() { return 'visible'; }, 'get visibilityState'),
@@ -83,21 +57,11 @@
         });
     } catch(e) {}
 
-    // 5. Maskowanie właściwości Navigator
-    try {
-        Object.defineProperty(Navigator.prototype, 'webdriver', {
-            get: markAsNative(function() { return false; }, 'get webdriver'),
-            configurable: true,
-            enumerable: true
-        });
-        Object.defineProperty(Navigator.prototype, 'maxTouchPoints', {
-            get: markAsNative(function() { return 5; }, 'get maxTouchPoints'),
-            configurable: true,
-            enumerable: true
-        });
-    } catch(e) {}
+    // 4. Inteligenta neutralizacja eventów z weryfikacją e.isTrusted
+    // Testportal wykonuje syntetyczny test (dispatchEvent z e.isTrusted === false).
+    // Jeśli zablokujemy zdarzenia syntetyczne, Testportal zgłasza błąd "Wtyczki modyfikujące zachowanie"!
+    // Dlatego przepuszczamy zdarzenia z e.isTrusted === false, a blokujemy TYLKO prawdziwe zdarzenia systemowe (e.isTrusted === true).
 
-    // 6. Bezpieczne przechwytywanie i neutralizacja eventów utraty ostrości na EventTarget.prototype
     const BLOCKED_EVENTS = ['blur', 'focusout', 'visibilitychange', 'pagehide', 'mouseleave', 'mouseout', 'freeze'];
 
     const originalAddEventListener = EventTarget.prototype.addEventListener;
@@ -105,30 +69,37 @@
     EventTarget.prototype.addEventListener = markAsNative(function(type, listener, options) {
         const lowerType = String(type).toLowerCase();
         if (BLOCKED_EVENTS.includes(lowerType)) {
-            // Przepuszczamy rejestrację atapera, który natychmiast zatrzymuje zdarzenie bez rzucania błędów
-            const safeListener = markAsNative(function(event) {
-                if (event) {
+            const smartListener = markAsNative(function(event) {
+                // Jeśli zdarzenie jest PRAWDZIWYM zdarzeniem systemowym (użytkownik zmienił kartę / wyszedł z apki):
+                if (event && event.isTrusted === true) {
                     try { event.stopImmediatePropagation(); } catch(e) {}
                     try { event.stopPropagation(); } catch(e) {}
                     try { if (event.preventDefault) event.preventDefault(); } catch(e) {}
+                    return;
+                }
+                // Zdarzenie syntetyczne Testportalu (test sprawdzający czy zdarzenia działają) - wykonaj normalnie!
+                if (typeof listener === 'function') {
+                    return listener.call(this, event);
+                } else if (listener && typeof listener.handleEvent === 'function') {
+                    return listener.handleEvent(event);
                 }
             }, listener ? (listener.name || 'listener') : 'listener');
-            
-            return originalAddEventListener.call(this, type, safeListener, options);
+
+            return originalAddEventListener.call(this, type, smartListener, options);
         }
         return originalAddEventListener.call(this, type, listener, options);
     }, 'addEventListener');
 
-    // 7. Przechwytywanie w fazie capture
+    // 5. Tłumienie w fazie przechwytywania (Capture Phase) wyłącznie dla prawdziwych zdarzeń systemowych
     BLOCKED_EVENTS.forEach(eventName => {
         originalAddEventListener.call(window, eventName, markAsNative(function(e) {
-            if (e) {
+            if (e && e.isTrusted === true) {
                 try { e.stopImmediatePropagation(); } catch(err) {}
                 try { e.stopPropagation(); } catch(err) {}
                 try { if (e.preventDefault) e.preventDefault(); } catch(err) {}
             }
-        }, 'suppressEvent'), true);
+        }, 'smartSuppressor'), true);
     });
 
-    console.log('[WhiteSolution Stealth] Silnik anty-detekcji aktywny.');
+    console.log('[WhiteSolution Stealth Engine] Inteligentny silnik anty-detekcji z filtrem e.isTrusted aktywny.');
 })();
