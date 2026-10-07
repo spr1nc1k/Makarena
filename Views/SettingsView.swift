@@ -131,7 +131,7 @@ struct SettingsView: View {
                         .foregroundColor(.secondary)
                 }
             }
-            .navigationTitle("Ustawienia Stealth")
+            .navigationTitle("WhiteSolution WebSite")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .confirmationAction) {

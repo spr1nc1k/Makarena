@@ -11,7 +11,9 @@
     <key>CFBundleInfoDictionaryVersion</key>
     <string>6.0</string>
     <key>CFBundleName</key>
-    <string>Makarena</string>
+    <string>WhiteSolution</string>
+    <key>CFBundleDisplayName</key>
+    <string>WhiteSolution WebSite</string>
     <key>CFBundlePackageType</key>
     <string>APPL</string>
     <key>CFBundleShortVersionString</key>

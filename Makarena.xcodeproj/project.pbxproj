@@ -14,6 +14,8 @@
 		A10000092C00000100000000 /* AIService.swift in Sources */ = {isa = PBXBuildFile; fileRef = A100000A2C00000100000000 /* AIService.swift */; };
 		A100000B2C00000100000000 /* VolumeKeyObserver.swift in Sources */ = {isa = PBXBuildFile; fileRef = A100000C2C00000100000000 /* VolumeKeyObserver.swift */; };
 		A10000202C00000100000000 /* UpdateService.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10000212C00000100000000 /* UpdateService.swift */; };
+		A10000302C00000100000000 /* TabModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10000312C00000100000000 /* TabModel.swift */; };
+		A10000322C00000100000000 /* TabManagerView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10000332C00000100000000 /* TabManagerView.swift */; };
 		A100000D2C00000100000000 /* testportal_bypass.js in Resources */ = {isa = PBXBuildFile; fileRef = A100000E2C00000100000000 /* testportal_bypass.js */; };
 		A100000F2C00000100000000 /* ai_injector.js in Resources */ = {isa = PBXBuildFile; fileRef = A10000102C00000100000000 /* ai_injector.js */; };
 /* End PBXBuildFile section */
@@ -27,6 +29,8 @@
 		A100000A2C00000100000000 /* AIService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Services/AIService.swift; sourceTree = "<group>"; };
 		A100000C2C00000100000000 /* VolumeKeyObserver.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Services/VolumeKeyObserver.swift; sourceTree = "<group>"; };
 		A10000212C00000100000000 /* UpdateService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Services/UpdateService.swift; sourceTree = "<group>"; };
+		A10000312C00000100000000 /* TabModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Models/TabModel.swift; sourceTree = "<group>"; };
+		A10000332C00000100000000 /* TabManagerView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Views/TabManagerView.swift; sourceTree = "<group>"; };
 		A100000E2C00000100000000 /* testportal_bypass.js */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.javascript; path = Scripts/testportal_bypass.js; sourceTree = "<group>"; };
 		A10000102C00000100000000 /* ai_injector.js */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.javascript; path = Scripts/ai_injector.js; sourceTree = "<group>"; };
 		A10000112C00000100000000 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
@@ -53,6 +57,8 @@
 				A100000A2C00000100000000 /* AIService.swift */,
 				A100000C2C00000100000000 /* VolumeKeyObserver.swift */,
 				A10000212C00000100000000 /* UpdateService.swift */,
+				A10000312C00000100000000 /* TabModel.swift */,
+				A10000332C00000100000000 /* TabManagerView.swift */,
 				A100000E2C00000100000000 /* testportal_bypass.js */,
 				A10000102C00000100000000 /* ai_injector.js */,
 				A10000112C00000100000000 /* Info.plist */,
@@ -145,6 +151,8 @@
 				A10000092C00000100000000 /* AIService.swift in Sources */,
 				A100000B2C00000100000000 /* VolumeKeyObserver.swift in Sources */,
 				A10000202C00000100000000 /* UpdateService.swift in Sources */,
+				A10000302C00000100000000 /* TabModel.swift in Sources */,
+				A10000322C00000100000000 /* TabManagerView.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
