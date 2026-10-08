@@ -34,11 +34,17 @@ public class AIService: ObservableObject {
         let optionsFormatted = options.enumerated().map { "[\($0.offset)] \($0.element)" }.joined(separator: "\n")
         
         let prompt = """
-        Pytanie: \(question)
+        Jesteś ekspertem rozwiązującym testy (obsługujesz pytania wyboru jednokrotnego, wielokrotnego oraz pytania typu Prawda/Fałsz, Tak/Nie).
+        Przeanalizuj poniższe pytanie i wyznacz dokładnie JEDNĄ prawidłową odpowiedź.
+        
+        Pytanie:
+        \(question)
+        
         Opcje:
         \(optionsFormatted)
         
-        Zwróć ODPOWIEDŹ WYŁĄCZNIE W FORMATCIE JSON: {"correctIndex": 0}
+        Zwróć ODPOWIEDŹ WYŁĄCZNIE W FORMATCIE JSON (bez bloku markdown, bez dodatkowego tekstu):
+        {"correctIndex": 0}
         """
         
         // Jeśli użytkownik podał własny klucz Gemini/Groq

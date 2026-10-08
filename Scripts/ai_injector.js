@@ -1,10 +1,11 @@
 // ai_injector.js
-// Niewykrywalny moduł podpowiedzi AI dla Makarena - pogrubianie pierwszej litery opcji i autouzupełnianie duchem w pytaniach otwartych
+// Niewykrywalny moduł podpowiedzi AI dla Makarena - auto-skanowanie kolejnych pytań, obsługa Prawda/Fałsz, pogrubianie pierwszej litery i ghost autocomplete
 
 (function() {
     'use strict';
 
     let isPanicMode = false;
+    let currentQuestionText = '';
     const originalPlaceholders = new Map();
     const modifiedNodes = [];
     const activeGhostOverlays = [];
@@ -35,7 +36,7 @@
 
         const questionText = questionTextEl ? questionTextEl.innerText.trim().slice(0, 500) : '';
 
-        // Znajdź przyciski opcji radio/checkbox
+        // Znajdź przyciski opcji radio/checkbox lub przyciski Prawda/Fałsz
         const radioInputs = Array.from(document.querySelectorAll('input[type="radio"], input[type="checkbox"]'));
         
         let optionContainers = [];
@@ -44,12 +45,13 @@
         } else {
             optionContainers = Array.from(document.querySelectorAll(
                 '.question_option_wrapper, .answer_container, .option_wrapper, label.answer, .answer_item, ' +
-                '.answer-container, .answer-item, div[class*="answer"], div[class*="option"], label[class*="answer"]'
+                '.answer-container, .answer-item, div[class*="answer"], div[class*="option"], label[class*="answer"], ' +
+                '.true-false-option, button.answer, .tf_option'
             ));
         }
 
         let options = [];
-        optionContainers.forEach((el, index) => {
+        optionContainers.forEach((el) => {
             let text = el.innerText ? el.innerText.trim() : el.textContent ? el.textContent.trim() : '';
             if (text && !options.some(o => o.text === text)) {
                 options.push({ id: options.length, text: text });
@@ -76,7 +78,7 @@
         const letterSpan = targetElement.querySelector('.option_letter, .answer_letter, .letter, [class*="letter"]');
         if (letterSpan) {
             const orig = letterSpan.innerText;
-            letterSpan.innerHTML = '<strong style="font-weight: 900; font-size: 1.2em; color: #000; text-decoration: underline;">' + escapeHTML(orig) + '</strong>';
+            letterSpan.innerHTML = '<strong style="font-weight: 900; font-size: 1.25em; color: #000; text-decoration: underline;">' + escapeHTML(orig) + '</strong>';
             modifiedNodes.push({ element: letterSpan, originalHTML: orig });
             return;
         }
@@ -90,6 +92,7 @@
                 const trimmed = text.trimStart();
                 const leadingWhitespace = text.slice(0, text.length - trimmed.length);
                 
+                // Dopasowanie prefiksów np. "a)", "A.", "1)", "Prawda", "Fałsz", "P.", "F." lub 1 litery
                 const match = trimmed.match(/^([A-Za-d0-9][\)\.\:\-]?)/);
                 let boldLength = 1;
                 if (match && match[1]) {
@@ -100,7 +103,7 @@
                 const restPart = trimmed.slice(boldLength);
 
                 const span = document.createElement('span');
-                span.innerHTML = leadingWhitespace + '<strong style="font-weight: 900; font-size: 1.2em; color: #000; text-decoration: underline;">' + escapeHTML(firstPart) + '</strong>' + escapeHTML(restPart);
+                span.innerHTML = leadingWhitespace + '<strong style="font-weight: 900; font-size: 1.25em; color: #000; text-decoration: underline;">' + escapeHTML(firstPart) + '</strong>' + escapeHTML(restPart);
                 
                 if (node.parentNode) {
                     const parentNode = node.parentNode;
@@ -123,7 +126,7 @@
         } else {
             optionContainers = Array.from(document.querySelectorAll(
                 '.question_option_wrapper, .answer_container, .option_wrapper, label.answer, .answer_item, ' +
-                '.answer-container, .answer-item, div[class*="answer"], div[class*="option"], label[class*="answer"]'
+                '.answer-container, .answer-item, div[class*="answer"], div[class*="option"], label[class*="answer"], .true-false-option'
             ));
         }
         
@@ -195,7 +198,7 @@
 
                     ghostOverlay.innerHTML = 
                         '<span style="opacity: 0;">' + escapeHTML(typedPart) + '</span>' +
-                        '<span style="color: #666666; font-weight: 500; background: rgba(0, 85, 255, 0.1); border-radius: 2px;">' + escapeHTML(remainingPart) + '</span>';
+                        '<span style="color: #555555; font-weight: 600; background: rgba(0, 85, 255, 0.12); border-radius: 2px;">' + escapeHTML(remainingPart) + '</span>';
                 } else {
                     ghostOverlay.innerHTML = '<span style="color: #888888; font-style: italic; opacity: 0.6;"> (Podpowiedź: ' + escapeHTML(suggestion) + ')</span>';
                 }
@@ -250,6 +253,33 @@
         isPanicMode = false;
     }
 
+    // AUTOMATYCZNE WYKRYWANIE KOLEJNYCH PYTAŃ I PRZEJŚĆ MIĘDZY STRONAMI TESTU (MutationObserver)
+    function checkAndAutoAnalyzeNewQuestion() {
+        if (isPanicMode) return;
+        const qData = extractQuestionData();
+        if (qData && qData.question && qData.question !== currentQuestionText) {
+            currentQuestionText = qData.question;
+            sendServerLog({ event: 'NEW_QUESTION_PAGE_DETECTED', question: currentQuestionText });
+            window.prompt('__makarena_bridge:' + JSON.stringify({
+                action: 'questionDataExtracted',
+                data: qData
+            }), '');
+        }
+    }
+
+    // Obserwator zmian DOM na stronie Testportalu
+    const mutationObserver = new MutationObserver(function() {
+        checkAndAutoAnalyzeNewQuestion();
+    });
+    
+    if (document.body) {
+        mutationObserver.observe(document.body, { childList: true, subtree: true });
+    } else {
+        document.addEventListener('DOMContentLoaded', function() {
+            mutationObserver.observe(document.body, { childList: true, subtree: true });
+        });
+    }
+
     // Nasłuchuj zdarzeń wewnętrznych ze Swift
     document.addEventListener('__makarena_action', function(e) {
         if (!e || !e.detail) return;
@@ -257,6 +287,7 @@
 
         if (action === 'analyze') {
             disablePanicMode();
+            currentQuestionText = '';
             const data = extractQuestionData();
             if (data) {
                 window.prompt('__makarena_bridge:' + JSON.stringify({
