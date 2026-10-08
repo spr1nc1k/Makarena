@@ -18,6 +18,7 @@
 		A10000322C00000100000000 /* TabManagerView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10000332C00000100000000 /* TabManagerView.swift */; };
 		A100000D2C00000100000000 /* testportal_bypass.js in Resources */ = {isa = PBXBuildFile; fileRef = A100000E2C00000100000000 /* testportal_bypass.js */; };
 		A100000F2C00000100000000 /* ai_injector.js in Resources */ = {isa = PBXBuildFile; fileRef = A10000102C00000100000000 /* ai_injector.js */; };
+		A10000402C00000100000000 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = A10000412C00000100000000 /* Assets.xcassets */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -34,6 +35,7 @@
 		A100000E2C00000100000000 /* testportal_bypass.js */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.javascript; path = Scripts/testportal_bypass.js; sourceTree = "<group>"; };
 		A10000102C00000100000000 /* ai_injector.js */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.javascript; path = Scripts/ai_injector.js; sourceTree = "<group>"; };
 		A10000112C00000100000000 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
+		A10000412C00000100000000 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -62,6 +64,7 @@
 				A100000E2C00000100000000 /* testportal_bypass.js */,
 				A10000102C00000100000000 /* ai_injector.js */,
 				A10000112C00000100000000 /* Info.plist */,
+				A10000412C00000100000000 /* Assets.xcassets */,
 				A10000992C00000100000000 /* Products */,
 			);
 			sourceTree = "<group>";
@@ -134,6 +137,7 @@
 			files = (
 				A100000D2C00000100000000 /* testportal_bypass.js in Resources */,
 				A100000F2C00000100000000 /* ai_injector.js in Resources */,
+				A10000402C00000100000000 /* Assets.xcassets in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -163,6 +167,7 @@
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				ALWAYS_SEARCH_USER_PATHS = NO;
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CLANG_ANALYZER_NONNULL = YES;
 				CLANG_CXX_LANGUAGE_STANDARD = "gnu++20";
 				CLANG_ENABLE_MODULES = YES;
@@ -195,6 +200,7 @@
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				ALWAYS_SEARCH_USER_PATHS = NO;
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CLANG_ANALYZER_NONNULL = YES;
 				CLANG_CXX_LANGUAGE_STANDARD = "gnu++20";
 				CLANG_ENABLE_MODULES = YES;

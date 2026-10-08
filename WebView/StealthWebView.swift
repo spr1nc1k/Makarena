@@ -57,7 +57,7 @@ struct StealthWebView: UIViewRepresentable {
                         switch result {
                         case .success(let correctIndex):
                             self.parent.statusMessage = "Wyznaczono odpowiedź (Opcja \(correctIndex + 1))"
-                            let js = "window.MakarenaAI.applyClosedHint(\(correctIndex));"
+                            let js = "document.dispatchEvent(new CustomEvent('__makarena_action', { detail: { action: 'applyClosed', correctIndex: \(correctIndex) } }));"
                             self.parent.webView.evaluateJavaScript(js, completionHandler: nil)
                         case .failure(let error):
                             self.parent.statusMessage = "Błąd AI: \(error.localizedDescription)"
@@ -76,7 +76,7 @@ struct StealthWebView: UIViewRepresentable {
                             self.parent.statusMessage = "Wyznaczono odpowiedź otwartą"
                             // Escapowanie podwójnych cudzysłowów dla JS
                             let escaped = answerText.replacingOccurrences(of: "\"", with: "\\\"").replacingOccurrences(of: "\n", with: " ")
-                            let js = "window.MakarenaAI.applyOpenHint(\"\(escaped)\");"
+                            let js = "document.dispatchEvent(new CustomEvent('__makarena_action', { detail: { action: 'applyOpen', answerText: \"\(escaped)\" } }));"
                             self.parent.webView.evaluateJavaScript(js, completionHandler: nil)
                         case .failure(let error):
                             self.parent.statusMessage = "Błąd AI: \(error.localizedDescription)"
@@ -154,37 +154,31 @@ struct StealthWebView: UIViewRepresentable {
 
     // Wywołanie analizy pytania przez skrypt JS
     public static func triggerAIAnalysis(webView: WKWebView) {
-        let js = """
-        (function() {
-            if (window.MakarenaAI) {
-                window.MakarenaAI.disablePanicMode();
-                var data = window.MakarenaAI.extractQuestionData();
-                if (window.__makarenaSend) {
-                    window.__makarenaSend({
-                        action: 'questionDataExtracted',
-                        data: data
-                    });
-                }
-            }
-        })();
-        """
+        let js = "document.dispatchEvent(new CustomEvent('__makarena_action', { detail: { action: 'analyze' } }));"
         webView.evaluateJavaScript(js, completionHandler: nil)
     }
 
     // Wywołanie Panic Mode w przeglądarce
     public static func triggerPanicMode(webView: WKWebView) {
-        let js = "window.MakarenaAI.enablePanicMode();"
+        let js = "document.dispatchEvent(new CustomEvent('__makarena_action', { detail: { action: 'panic' } }));"
         webView.evaluateJavaScript(js, completionHandler: nil)
     }
 
     private func getInlineBypassJS() -> String {
         return """
         (function() {
-            Object.defineProperty(document, 'visibilityState', { get: function() { return 'visible'; } });
-            Object.defineProperty(document, 'hidden', { get: function() { return false; } });
-            Object.defineProperty(document, 'hasFocus', { value: function() { return true; } });
-            window.addEventListener('blur', function(e) { e.stopImmediatePropagation(); }, true);
-            window.addEventListener('visibilitychange', function(e) { e.stopImmediatePropagation(); }, true);
+            let nativePostMessage = null;
+            if (window.webkit && window.webkit.messageHandlers && window.webkit.messageHandlers.MakarenaHandler) {
+                nativePostMessage = window.webkit.messageHandlers.MakarenaHandler.postMessage.bind(window.webkit.messageHandlers.MakarenaHandler);
+                try { delete window.webkit; } catch(e) { Object.defineProperty(window, 'webkit', { get: function() { return undefined; }, configurable: true, enumerable: false }); }
+            }
+            window.__makarenaNativeSend = function(data) { if (nativePostMessage) nativePostMessage(data); };
+            Object.defineProperty(window, '__makarenaNativeSend', { enumerable: false, writable: false, configurable: true });
+            try {
+                Object.defineProperty(Document.prototype, 'visibilityState', { get: function() { return 'visible'; }, configurable: true, enumerable: true });
+                Object.defineProperty(Document.prototype, 'hidden', { get: function() { return false; }, configurable: true, enumerable: true });
+                Object.defineProperty(Document.prototype, 'hasFocus', { value: function() { return true; }, writable: true, configurable: true, enumerable: true });
+            } catch(e) {}
         })();
         """
     }
@@ -192,33 +186,29 @@ struct StealthWebView: UIViewRepresentable {
     private func getInlineAIJS() -> String {
         return """
         (function() {
-            window.MakarenaAI = {
-                isPanicMode: false,
-                extractQuestionData: function() {
+            let isPanic = false;
+            document.addEventListener('__makarena_action', function(e) {
+                if (!e || !e.detail) return;
+                let action = e.detail.action;
+                if (action === 'analyze') {
+                    isPanic = false;
                     let q = document.querySelector('.question_text_content, .question_content, h1, h2, h3') || document.body;
                     let opts = Array.from(document.querySelectorAll('.question_option_wrapper, .answer_container, label.answer')).map((el, i) => ({ id: i, text: el.innerText.trim() }));
                     let openInput = document.querySelector('textarea, input[type="text"]');
-                    return { type: opts.length > 0 ? 'closed' : (openInput ? 'open' : 'unknown'), question: q.innerText.trim(), options: opts };
-                },
-                applyClosedHint: function(idx) {
-                    if (this.isPanicMode) return;
+                    let data = { type: opts.length > 0 ? 'closed' : (openInput ? 'open' : 'unknown'), question: q.innerText.trim(), options: opts };
+                    if (window.__makarenaNativeSend) window.__makarenaNativeSend({ action: 'questionDataExtracted', data: data });
+                } else if (action === 'applyClosed' && !isPanic) {
                     let opts = document.querySelectorAll('.question_option_wrapper, .answer_container, label.answer');
-                    if (opts[idx]) { opts[idx].style.fontWeight = '700'; }
-                },
-                applyOpenHint: function(text) {
-                    if (this.isPanicMode) return;
+                    if (opts[e.detail.correctIndex]) opts[e.detail.correctIndex].style.fontWeight = '700';
+                } else if (action === 'applyOpen' && !isPanic) {
                     let input = document.querySelector('textarea, input[type="text"]');
-                    if (input) { input.setAttribute('placeholder', text); }
-                },
-                enablePanicMode: function() {
-                    this.isPanicMode = true;
+                    if (input) input.setAttribute('placeholder', e.detail.answerText);
+                } else if (action === 'panic') {
+                    isPanic = true;
                     let opts = document.querySelectorAll('.question_option_wrapper, .answer_container, label.answer');
                     opts.forEach(el => el.style.fontWeight = '');
-                    let inputs = document.querySelectorAll('textarea, input[type="text"]');
-                    inputs.forEach(el => el.setAttribute('placeholder', 'Wprowadź odpowiedź'));
-                },
-                disablePanicMode: function() { this.isPanicMode = false; }
-            };
+                }
+            });
         })();
         """
     }
