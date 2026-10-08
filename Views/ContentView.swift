@@ -165,8 +165,8 @@ struct ContentView: View {
                             .fill(notification == .activatedAI ? Color.green : Color.red)
                             .frame(width: 8, height: 8)
                             .shadow(color: (notification == .activatedAI ? Color.green : Color.red).opacity(0.8), radius: 4)
-                        Text(notification == .activatedAI ? "AI Włączone" : "Tryb Nauczyciel Włączony")
-                            .font(.system(size: 10, weight: .bold, design: .rounded))
+                        Text(notification == .activatedAI ? "Włączone" : "Wyłączone")
+                            .font(.system(size: 11, weight: .bold, design: .rounded))
                             .foregroundColor(.white)
                     }
                     .padding(.horizontal, 10)
@@ -261,6 +261,13 @@ struct ContentView: View {
     private func showNotification(_ state: NotificationState) {
         withAnimation(.spring()) {
             activeNotification = state
+        }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) {
+            withAnimation(.easeInOut) {
+                if activeNotification == state {
+                    activeNotification = nil
+                }
+            }
         }
     }
 }
