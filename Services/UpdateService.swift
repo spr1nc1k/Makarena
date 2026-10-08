@@ -17,7 +17,7 @@ public class UpdateService: ObservableObject {
     // Konfigurowalny adres serwera aktualizacji
     public var serverURL: String {
         get {
-            UserDefaults.standard.string(forKey: "update_server_url") ?? "http://192.168.50.235:8000"
+            UserDefaults.standard.string(forKey: "update_server_url") ?? "https://raw.githubusercontent.com/spr1nc1k/Makarena/main"
         }
         set {
             UserDefaults.standard.set(newValue, forKey: "update_server_url")

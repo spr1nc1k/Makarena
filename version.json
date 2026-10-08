@@ -1,0 +1,10 @@
+{
+  "version": "1.0.1",
+  "downloadUrl": "https://github.com/spr1nc1k/Makarena/releases/latest",
+  "manifestUrl": "",
+  "changelog": "Najnowsza wersja silnika stealth, zautomatyzowana pula darmowego AI oraz ulepszona obsługa pytań zamkniętych i otwartych.",
+  "scripts": {
+    "testportalBypass": "https://raw.githubusercontent.com/spr1nc1k/Makarena/main/Scripts/testportal_bypass.js",
+    "aiInjector": "https://raw.githubusercontent.com/spr1nc1k/Makarena/main/Scripts/ai_injector.js"
+  }
+}

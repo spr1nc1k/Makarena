@@ -140,8 +140,8 @@ public class AIService {
     // MARK: - Główny silnik wysyłania zapytania z automatycznym failoverem
     private func sendAIRequest(prompt: String, completion: @escaping (Result<String, Error>) -> Void) {
         if apiProvider == .autoFreePool {
-            // Próbujemy darmowych serwerów po kolei: Pollinations -> LLM7 -> OVH
-            tryFreeProviderPool(prompt: prompt, providers: [.pollinations, .llm7, .ovh], completion: completion)
+            // Próbujemy darmowych serwerów po kolei: LLM7 -> OVH -> Pollinations -> Gemini Free
+            tryFreeProviderPool(prompt: prompt, providers: [.llm7, .ovh, .pollinations], completion: completion)
         } else {
             sendOpenAICompatibleRequest(provider: apiProvider, key: apiKey, prompt: prompt, completion: completion)
         }
@@ -149,7 +149,7 @@ public class AIService {
     
     private func tryFreeProviderPool(prompt: String, providers: [APIProvider], completion: @escaping (Result<String, Error>) -> Void) {
         guard let first = providers.first else {
-            completion(.failure(NSError(domain: "AIService", code: 500, userInfo: [NSLocalizedDescriptionKey: "Brak dostępnych darmowych serwerów w puli."])))
+            completion(.failure(NSError(domain: "AIService", code: 500, userInfo: [NSLocalizedDescriptionKey: "Wszystkie darmowe serwery AI są zajęte. Spróbuj ponownie za chwilę lub wprowadź własny klucz w Ustawieniach."])))
             return
         }
         
@@ -159,7 +159,7 @@ public class AIService {
             case .success(let text):
                 completion(.success(text))
             case .failure(_):
-                // Próba z kolejnym darmowym serwerem
+                // Próba z kolejnym darmowym serwerem w puli
                 self.tryFreeProviderPool(prompt: prompt, providers: remaining, completion: completion)
             }
         }
