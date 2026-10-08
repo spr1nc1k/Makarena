@@ -3,7 +3,6 @@ import SwiftUI
 struct SettingsView: View {
     @Environment(\.dismiss) var dismiss
     @AppStorage("gemini_api_key") private var apiKey: String = ""
-    @AppStorage("api_provider") private var selectedProvider: String = AIService.APIProvider.autoFreePool.rawValue
 
     @StateObject private var updateService = UpdateService.shared
     @State private var serverURLInput: String = UpdateService.shared.serverURL
@@ -11,33 +10,35 @@ struct SettingsView: View {
     var body: some View {
         NavigationView {
             Form {
-                Section(header: Text("Darmowe Silniki AI (12 Dostawców)")) {
-                    Picker("Dostawca AI", selection: $selectedProvider) {
-                        ForEach(AIService.APIProvider.allCases) { provider in
-                            Text(provider.rawValue).tag(provider.rawValue)
+                Section(header: Text("Silnik AI (100% Darmowy)")) {
+                    VStack(alignment: .leading, spacing: 6) {
+                        HStack {
+                            Image(systemName: "checkmark.seal.fill")
+                                .foregroundColor(.green)
+                            Text("Automatyczna Pula Darmowych Serwerów AI")
+                                .bold()
                         }
+                        Text("Aplikacja automatycznie przechodzi po puli bezpłatnych serwerów (Pollinations, LLM7, OVH, Gemini). Użytkownik nie musi niczego wybierać ani konfigurować.")
+                            .font(.caption)
+                            .foregroundColor(.secondary)
                     }
                     
-                    if selectedProvider != AIService.APIProvider.autoFreePool.rawValue &&
-                       selectedProvider != AIService.APIProvider.pollinations.rawValue &&
-                       selectedProvider != AIService.APIProvider.llm7.rawValue &&
-                       selectedProvider != AIService.APIProvider.ovh.rawValue {
-                        SecureField("Wprowadź swój Klucz API", text: $apiKey)
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text("Opcjonalny własny Klucz Gemini API (darmowy z Google AI Studio):")
+                            .font(.caption)
+                            .foregroundColor(.gray)
+                        SecureField("Wklej opcjonalny klucz API (AIzaSy...)", text: $apiKey)
                             .autocapitalization(.none)
                             .disableAutocorrection(true)
-                    } else {
-                        Text("✅ W wybranym trybie AI działa 100% darmowo i bez rejestracji!")
-                            .font(.caption)
-                            .foregroundColor(.green)
                     }
                 }
 
                 Section(header: Text("Automatyczne Aktualizacje")) {
                     VStack(alignment: .leading, spacing: 4) {
-                        Text("Adres Serwera Aktualizacji (SSH/HTTP)")
+                        Text("Adres Serwera Aktualizacji (GitHub / Cloudflare)")
                             .font(.caption)
                             .foregroundColor(.gray)
-                        TextField("http://192.168.50.235:8000", text: $serverURLInput)
+                        TextField("https://raw.githubusercontent.com/spr1nc1k/Makarena/main", text: $serverURLInput)
                             .textFieldStyle(RoundedBorderTextFieldStyle())
                             .autocapitalization(.none)
                             .disableAutocorrection(true)
@@ -51,7 +52,7 @@ struct SettingsView: View {
                                 .font(.caption)
                                 .foregroundColor(.secondary)
                             if !updateService.latestVersion.isEmpty {
-                                Text("Najnowsza na serwerze: v\(updateService.latestVersion)")
+                                Text("Najnowsza: v\(updateService.latestVersion)")
                                     .font(.caption)
                                     .foregroundColor(updateService.updateAvailable ? .green : .gray)
                             }
@@ -63,9 +64,7 @@ struct SettingsView: View {
                         } else {
                             Button("Sprawdź") {
                                 updateService.serverURL = serverURLInput
-                                updateService.checkForUpdates { available, msg in
-                                    // Status jest aktualizowany w obiekcie UpdateService
-                                }
+                                updateService.checkForUpdates { _, _ in }
                             }
                             .buttonStyle(.bordered)
                         }
@@ -109,9 +108,9 @@ struct SettingsView: View {
                         Image(systemName: "speaker.wave.1.fill")
                             .foregroundColor(.green)
                         VStack(alignment: .leading) {
-                            Text("Głośność w dół (x2)")
+                            Text("Głośność w dół")
                                 .bold()
-                            Text("Uruchamia analizę pytania i wyznacza odpowiedź")
+                            Text("Włącza AI Solve (Wyświetla powiadomienie 'Włączone')")
                                 .font(.caption)
                                 .foregroundColor(.gray)
                         }
@@ -121,30 +120,21 @@ struct SettingsView: View {
                         Image(systemName: "speaker.wave.3.fill")
                             .foregroundColor(.red)
                         VStack(alignment: .leading) {
-                            Text("Głośność w górę (x2)")
+                            Text("Głośność w górę")
                                 .bold()
-                            Text("Tryb 'Nauczyciel patrzy' (natychmiast ukrywa odpowiedzi)")
+                            Text("Włącza Panic Mode (Wyświetla powiadomienie 'Wyłączone')")
                                 .font(.caption)
                                 .foregroundColor(.gray)
                         }
                     }
                 }
-
-                Section(header: Text("Informacja o omijaniu Testportal")) {
-                    Text("System automatycznie neutralizuje zdarzenia blur, visibilitychange i pagehide, zapobiegając rejestrowaniu opuszczenia karty.")
-                        .font(.caption)
-                        .foregroundColor(.secondary)
-                }
             }
-            .navigationTitle("WhiteSolution WebSite")
+            .navigationTitle("Ustawienia Makarena")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .confirmationAction) {
                     Button("Gotowe") {
                         AIService.shared.apiKey = apiKey
-                        if let provider = AIService.APIProvider(rawValue: selectedProvider) {
-                            AIService.shared.apiProvider = provider
-                        }
                         dismiss()
                     }
                 }
