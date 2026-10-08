@@ -17,7 +17,11 @@ public class UpdateService: ObservableObject {
     // Konfigurowalny adres serwera aktualizacji
     public var serverURL: String {
         get {
-            UserDefaults.standard.string(forKey: "update_server_url") ?? "https://raw.githubusercontent.com/spr1nc1k/Makarena/main"
+            let saved = UserDefaults.standard.string(forKey: "update_server_url") ?? ""
+            if saved.isEmpty || saved.contains("192.168.50.235") || saved.contains("8000") {
+                return "https://raw.githubusercontent.com/spr1nc1k/Makarena/main"
+            }
+            return saved
         }
         set {
             UserDefaults.standard.set(newValue, forKey: "update_server_url")
@@ -65,15 +69,13 @@ public class UpdateService: ObservableObject {
             DispatchQueue.main.async {
                 self?.isChecking = false
                 
-                if let error = error {
-                    let msg = "Błąd połączenia z serwerem: \(error.localizedDescription)"
-                    self?.updateStatusMessage = msg
-                    completion(false, msg)
-                    return
-                }
-                
-                guard let data = data else {
-                    let msg = "Otrzymano puste dane z serwera."
+                if error != nil || data == nil {
+                    if !endpoint.contains("githubusercontent") {
+                        self?.serverURL = "https://raw.githubusercontent.com/spr1nc1k/Makarena/main"
+                        self?.checkForUpdates(completion: completion)
+                        return
+                    }
+                    let msg = "Błąd połączenia z serwerem aktualizacji."
                     self?.updateStatusMessage = msg
                     completion(false, msg)
                     return
