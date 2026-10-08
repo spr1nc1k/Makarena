@@ -5,7 +5,7 @@ import Combine
 import UIKit
 
 /// Obserwator fizycznych przycisków głośności na iOS.
-/// Wykrywa naciśnięcia głośności w dół (AI Solve) oraz w górę (Panic Mode).
+/// Wykrywa DWUKROTNE naciśnięcie głośności w dół (AI Solve) oraz w górę (Panic Mode).
 public class VolumeKeyObserver: ObservableObject {
     public static let shared = VolumeKeyObserver()
     
@@ -33,7 +33,6 @@ public class VolumeKeyObserver: ObservableObject {
         lastVolume = audioSession.outputVolume
         setupHiddenVolumeSlider()
         
-        // Obserwacja właściwości outputVolume
         audioSession.publisher(for: \.outputVolume)
             .receive(on: DispatchQueue.main)
             .sink { [weak self] newVolume in
@@ -80,33 +79,34 @@ public class VolumeKeyObserver: ObservableObject {
         let delta = newVolume - lastVolume
         lastVolume = newVolume
         
-        // Zmniejszenie głośności (Volume Down) -> AI Solve
+        // Zmniejszenie głośności (Volume Down) -> Wymaga DWA RAZY w ciągu 1.2 sekundy
         if delta < -0.001 || newVolume < 0.45 {
             cleanOldTimestamps(&volumeDownTimestamps, now: now)
             volumeDownTimestamps.append(now)
             
-            if volumeDownTimestamps.count >= 1 { // Natychmiastowe reagowanie na kliknięcie głośności w dół
+            if volumeDownTimestamps.count >= 2 { // DWUKROTNE kliknięcie
                 volumeDownTimestamps.removeAll()
                 self.lastTriggeredAction = .triggerAI
-                print("[Makarena Volume] GŁOŚNOŚĆ W DÓŁ -> Włączam AI Solve")
+                print("[Makarena Volume] 2x GŁOŚNOŚĆ W DÓŁ -> Aktywuję AI Solve")
                 resetVolumeToCenter()
             }
         }
-        // Zwiększenie głośności (Volume Up) -> Panic Mode
+        // Zwiększenie głośności (Volume Up) -> Wymaga DWA RAZY w ciągu 1.2 sekundy
         else if delta > 0.001 || newVolume > 0.55 {
             cleanOldTimestamps(&volumeUpTimestamps, now: now)
             volumeUpTimestamps.append(now)
             
-            if volumeUpTimestamps.count >= 1 { // Natychmiastowe reagowanie na kliknięcie głośności w górę
+            if volumeUpTimestamps.count >= 2 { // DWUKROTNE kliknięcie
                 volumeUpTimestamps.removeAll()
                 self.lastTriggeredAction = .triggerPanic
-                print("[Makarena Volume] GŁOŚNOŚĆ W GÓRĘ -> Włączam PANIC MODE")
+                print("[Makarena Volume] 2x GŁOŚNOŚĆ W GÓRĘ -> Aktywuję PANIC MODE")
                 resetVolumeToCenter()
             }
         }
     }
     
     private func cleanOldTimestamps(_ array: inout [Date], now: Date) {
-        array = array.filter { now.timeIntervalSince($0) < 1.5 }
+        // Zliczamy kliknięcia wyłącznie z ostatnich 1.2 sekundy
+        array = array.filter { now.timeIntervalSince($0) < 1.2 }
     }
 }
