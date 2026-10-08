@@ -81,10 +81,17 @@ public class UpdateService: ObservableObject {
                     return
                 }
                 
+                guard let validData = data else {
+                    let msg = "Błąd pobierania danych z serwera."
+                    self?.updateStatusMessage = msg
+                    completion(false, msg)
+                    return
+                }
+                
                 do {
                     let decoder = JSONDecoder()
                     decoder.keyDecodingStrategy = .convertFromSnakeCase
-                    let manifest = try decoder.decode(UpdateManifest.self, from: data)
+                    let manifest = try decoder.decode(UpdateManifest.self, from: validData)
                     
                     self?.latestVersion = manifest.version
                     self?.changelog = manifest.changelog ?? "Brak opisu zmian."
