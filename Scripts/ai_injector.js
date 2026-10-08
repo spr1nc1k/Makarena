@@ -1,5 +1,5 @@
 // ai_injector.js
-// Niewykrywalny moduł podpowiedzi AI dla Makarena
+// Niewykrywalny moduł podpowiedzi AI dla Makarena (zerowy ślad w window)
 
 (function() {
     'use strict';
@@ -91,7 +91,7 @@
         isPanicMode = false;
     }
 
-    // Nasłuchuj bezpiecznych zdarzeń wyzwalanych ze Swift
+    // Nasłuchuj zdarzeń wewnętrznych z poziomu Swift
     document.addEventListener('__makarena_action', function(e) {
         if (!e || !e.detail) return;
         const action = e.detail.action;
@@ -99,11 +99,12 @@
         if (action === 'analyze') {
             disablePanicMode();
             const data = extractQuestionData();
-            if (data && window.__makarenaNativeSend) {
-                window.__makarenaNativeSend({
+            if (data) {
+                // Zamiast window.webkit.messageHandlers (które zdradzają WKWebView) używamy window.prompt z cichym przechwyceniem w WKUIDelegate!
+                window.prompt('__makarena_bridge:' + JSON.stringify({
                     action: 'questionDataExtracted',
                     data: data
-                });
+                }), '');
             }
         } else if (action === 'applyClosed') {
             applyClosedHint(e.detail.correctIndex);

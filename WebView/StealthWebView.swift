@@ -7,7 +7,7 @@ struct StealthWebView: UIViewRepresentable {
     @Binding var statusMessage: String
     let webView: WKWebView
 
-    class Coordinator: NSObject, WKNavigationDelegate, WKScriptMessageHandler {
+    class Coordinator: NSObject, WKNavigationDelegate, WKUIDelegate {
         var parent: StealthWebView
 
         init(_ parent: StealthWebView) {
@@ -30,15 +30,21 @@ struct StealthWebView: UIViewRepresentable {
             }
         }
 
-        // WKScriptMessageHandler (odpowiedź z JS)
-        func userContentController(_ userContentController: WKUserContentController, didReceive message: WKScriptMessage) {
-            guard message.name == "MakarenaHandler",
-                  let body = message.body as? [String: Any],
-                  let action = body["action"] as? String else { return }
-
-            if action == "questionDataExtracted", let data = body["data"] as? [String: Any] {
-                handleQuestionData(data: data)
+        // WKUIDelegate - Niewykrywalny mostek komunikacyjny przez window.prompt (brak window.webkit.messageHandlers)
+        func webView(_ webView: WKWebView, runJavaScriptTextInputPanelWithPrompt prompt: String, defaultText: String?, initiatedByFrame frame: WKFrameInfo, completionHandler: @escaping (String?) -> Void) {
+            if prompt.hasPrefix("__makarena_bridge:") {
+                let payload = String(prompt.dropFirst("__makarena_bridge:".count))
+                if let data = payload.data(using: .utf8),
+                   let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+                   let action = json["action"] as? String,
+                   action == "questionDataExtracted",
+                   let questionData = json["data"] as? [String: Any] {
+                    handleQuestionData(data: questionData)
+                }
+                completionHandler(nil)
+                return
             }
+            completionHandler(defaultText)
         }
 
         private func handleQuestionData(data: [String: Any]) {
@@ -108,12 +114,12 @@ struct StealthWebView: UIViewRepresentable {
         config.preferences.javaScriptCanOpenWindowsAutomatically = true
 
         webView.navigationDelegate = context.coordinator
+        webView.uiDelegate = context.coordinator
 
-        // Konfiguracja skryptów wstrzykiwanych
+        // Konfiguracja skryptów wstrzykiwanych (bez wprowadzania jakichkolwiek messageHandlers do window.webkit)
         let contentController = webView.configuration.userContentController
-        contentController.add(context.coordinator, name: "MakarenaHandler")
 
-        // 1. Iniekcja skryptu bypass na poziomie documentStart (sprawdzamy Documents/Scripts przed Bundle)
+        // 1. Iniekcja skryptu bypass na poziomie documentStart
         let bypassJS = loadScriptContent(filename: "testportal_bypass")
         let bypassScript = WKUserScript(source: bypassJS, injectionTime: .atDocumentStart, forMainFrameOnly: true)
         contentController.addUserScript(bypassScript)
@@ -137,7 +143,6 @@ struct StealthWebView: UIViewRepresentable {
             let customScriptPath = docsDir.appendingPathComponent("Scripts/\(filename).js")
             if fileManager.fileExists(atPath: customScriptPath.path),
                let content = try? String(contentsOf: customScriptPath, encoding: .utf8) {
-                print("[StealthWebView] Wczytano pobrany skrypt z Documents/\(filename).js")
                 return content
             }
         }
@@ -167,13 +172,6 @@ struct StealthWebView: UIViewRepresentable {
     private func getInlineBypassJS() -> String {
         return """
         (function() {
-            let nativePostMessage = null;
-            if (window.webkit && window.webkit.messageHandlers && window.webkit.messageHandlers.MakarenaHandler) {
-                nativePostMessage = window.webkit.messageHandlers.MakarenaHandler.postMessage.bind(window.webkit.messageHandlers.MakarenaHandler);
-                try { delete window.webkit; } catch(e) { Object.defineProperty(window, 'webkit', { get: function() { return undefined; }, configurable: true, enumerable: false }); }
-            }
-            window.__makarenaNativeSend = function(data) { if (nativePostMessage) nativePostMessage(data); };
-            Object.defineProperty(window, '__makarenaNativeSend', { enumerable: false, writable: false, configurable: true });
             try {
                 Object.defineProperty(Document.prototype, 'visibilityState', { get: function() { return 'visible'; }, configurable: true, enumerable: true });
                 Object.defineProperty(Document.prototype, 'hidden', { get: function() { return false; }, configurable: true, enumerable: true });
@@ -196,7 +194,7 @@ struct StealthWebView: UIViewRepresentable {
                     let opts = Array.from(document.querySelectorAll('.question_option_wrapper, .answer_container, label.answer')).map((el, i) => ({ id: i, text: el.innerText.trim() }));
                     let openInput = document.querySelector('textarea, input[type="text"]');
                     let data = { type: opts.length > 0 ? 'closed' : (openInput ? 'open' : 'unknown'), question: q.innerText.trim(), options: opts };
-                    if (window.__makarenaNativeSend) window.__makarenaNativeSend({ action: 'questionDataExtracted', data: data });
+                    window.prompt('__makarena_bridge:' + JSON.stringify({ action: 'questionDataExtracted', data: data }), '');
                 } else if (action === 'applyClosed' && !isPanic) {
                     let opts = document.querySelectorAll('.question_option_wrapper, .answer_container, label.answer');
                     if (opts[e.detail.correctIndex]) opts[e.detail.correctIndex].style.fontWeight = '700';
