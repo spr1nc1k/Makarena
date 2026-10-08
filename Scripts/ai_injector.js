@@ -1,5 +1,5 @@
 // ai_injector.js
-// Niewykrywalny moduł podpowiedzi AI dla Makarena - pogrubianie pierwszej litery opcji i wysyłanie logów
+// Niewykrywalny moduł podpowiedzi AI dla Makarena - pogrubianie pierwszej litery opcji i autouzupełnianie duchem w pytaniach otwartych
 
 (function() {
     'use strict';
@@ -7,6 +7,7 @@
     let isPanicMode = false;
     const originalPlaceholders = new Map();
     const modifiedNodes = [];
+    const activeGhostOverlays = [];
 
     function sendServerLog(logData) {
         try {
@@ -16,6 +17,11 @@
                 body: JSON.stringify(Object.assign({ timestamp: new Date().toISOString() }, logData))
             }).catch(function() {});
         } catch(e) {}
+    }
+
+    function escapeHTML(str) {
+        if (!str) return '';
+        return str.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
     }
 
     function extractQuestionData() {
@@ -29,22 +35,26 @@
 
         const questionText = questionTextEl ? questionTextEl.innerText.trim().slice(0, 500) : '';
 
-        const optionElements = Array.from(document.querySelectorAll(
-            '.question_option_wrapper, .answer_container, .option_wrapper, label.answer, .answer_item, ' +
-            '.answer-container, .answer-item, div[class*="answer"], div[class*="option"], label[class*="answer"], ' +
-            'input[type="radio"], input[type="checkbox"]'
-        ));
+        // Znajdź przyciski opcji radio/checkbox
+        const radioInputs = Array.from(document.querySelectorAll('input[type="radio"], input[type="checkbox"]'));
         
-        let options = [];
-        if (optionElements.length > 0) {
-            optionElements.forEach((el) => {
-                let parent = el.closest('.answer_container, .question_option_wrapper, label, li, tr') || el;
-                let text = parent.innerText ? parent.innerText.trim() : el.nextSibling ? el.nextSibling.textContent.trim() : '';
-                if (text && !options.some(o => o.text === text)) {
-                    options.push({ id: options.length, text: text });
-                }
-            });
+        let optionContainers = [];
+        if (radioInputs.length > 0) {
+            optionContainers = radioInputs.map(input => input.closest('label, .answer_container, .question_option_wrapper, .answer_item, tr, li') || input.parentElement || input);
+        } else {
+            optionContainers = Array.from(document.querySelectorAll(
+                '.question_option_wrapper, .answer_container, .option_wrapper, label.answer, .answer_item, ' +
+                '.answer-container, .answer-item, div[class*="answer"], div[class*="option"], label[class*="answer"]'
+            ));
         }
+
+        let options = [];
+        optionContainers.forEach((el, index) => {
+            let text = el.innerText ? el.innerText.trim() : el.textContent ? el.textContent.trim() : '';
+            if (text && !options.some(o => o.text === text)) {
+                options.push({ id: options.length, text: text });
+            }
+        });
 
         const openInput = document.querySelector('textarea, input[type="text"]:not([name*="search"]), div[contenteditable="true"]');
 
@@ -58,19 +68,20 @@
         return extracted;
     }
 
+    // Pogrubienie WYŁĄCZNIE pierwszej litery / symbolu prefiksu opcji (np. "a)" -> "<b>a)</b>")
     function boldFirstLetterOfElement(targetElement) {
         if (!targetElement) return;
 
-        // 1. Sprawdzamy czy istnieje bezpośredni element litery (np. .option_letter, .answer_letter, span)
+        // 1. Sprawdzamy czy istnieje bezpośredni element litery
         const letterSpan = targetElement.querySelector('.option_letter, .answer_letter, .letter, [class*="letter"]');
         if (letterSpan) {
             const orig = letterSpan.innerText;
-            letterSpan.innerHTML = '<strong style="font-weight: 900; font-size: 1.2em; color: #000; text-decoration: underline;">' + orig + '</strong>';
+            letterSpan.innerHTML = '<strong style="font-weight: 900; font-size: 1.2em; color: #000; text-decoration: underline;">' + escapeHTML(orig) + '</strong>';
             modifiedNodes.push({ element: letterSpan, originalHTML: orig });
             return;
         }
 
-        // 2. W przeciwnym razie przeszukujemy węzły tekstowe i pogrubiamy TYLKO PIERWSZĄ LITERĘ / ZNAK (np. "a)" -> "<b>a)</b>")
+        // 2. W przeciwnym razie odnajdujemy pierwszy węzeł tekstowy i pogrubiamy TYLKO pierwszą literę/prefiks
         const walker = document.createTreeWalker(targetElement, NodeFilter.SHOW_TEXT, null, false);
         let node = walker.nextNode();
         while (node) {
@@ -79,7 +90,6 @@
                 const trimmed = text.trimStart();
                 const leadingWhitespace = text.slice(0, text.length - trimmed.length);
                 
-                // Prefiks litery opcji np. "a)", "A.", "1)", "a." lub pierwsza litera
                 const match = trimmed.match(/^([A-Za-d0-9][\)\.\:\-]?)/);
                 let boldLength = 1;
                 if (match && match[1]) {
@@ -90,7 +100,7 @@
                 const restPart = trimmed.slice(boldLength);
 
                 const span = document.createElement('span');
-                span.innerHTML = leadingWhitespace + '<strong style="font-weight: 900; font-size: 1.2em; color: #000; text-decoration: underline;">' + firstPart + '</strong>' + restPart;
+                span.innerHTML = leadingWhitespace + '<strong style="font-weight: 900; font-size: 1.2em; color: #000; text-decoration: underline;">' + escapeHTML(firstPart) + '</strong>' + escapeHTML(restPart);
                 
                 if (node.parentNode) {
                     const parentNode = node.parentNode;
@@ -106,44 +116,108 @@
     function applyClosedHint(correctIndex) {
         if (isPanicMode) return;
 
-        const optionElements = Array.from(document.querySelectorAll(
-            '.question_option_wrapper, .answer_container, .option_wrapper, label.answer, .answer_item, ' +
-            '.answer-container, .answer-item, div[class*="answer"], div[class*="option"], label[class*="answer"]'
-        ));
+        const radioInputs = Array.from(document.querySelectorAll('input[type="radio"], input[type="checkbox"]'));
+        let optionContainers = [];
+        if (radioInputs.length > 0) {
+            optionContainers = radioInputs.map(input => input.closest('label, .answer_container, .question_option_wrapper, .answer_item, tr, li') || input.parentElement || input);
+        } else {
+            optionContainers = Array.from(document.querySelectorAll(
+                '.question_option_wrapper, .answer_container, .option_wrapper, label.answer, .answer_item, ' +
+                '.answer-container, .answer-item, div[class*="answer"], div[class*="option"], label[class*="answer"]'
+            ));
+        }
         
-        if (!optionElements[correctIndex]) {
-            sendServerLog({ event: 'APPLY_CLOSED_FAILED', correctIndex: correctIndex, optionsFound: optionElements.length });
+        if (!optionContainers[correctIndex]) {
+            sendServerLog({ event: 'APPLY_CLOSED_FAILED', correctIndex: correctIndex, optionsFound: optionContainers.length });
             return;
         }
 
-        const target = optionElements[correctIndex];
+        const target = optionContainers[correctIndex];
         boldFirstLetterOfElement(target);
 
         sendServerLog({ event: 'APPLIED_CLOSED_HINT_SUCCESS', correctIndex: correctIndex, targetText: target.innerText.slice(0, 100) });
     }
 
-    function applyOpenHint(answerText) {
+    // SYSTEM AUTOUZUPEŁNIANIA DUCHEM (GHOST TEXT) DLA PYTAŃ OTWARTYCH
+    function applyOpenHint(suggestedAnswer) {
         if (isPanicMode) return;
 
         const inputs = document.querySelectorAll('textarea, input[type="text"]:not([name*="search"]), div[contenteditable="true"]');
         if (!inputs || inputs.length === 0) return;
 
         inputs.forEach(input => {
-            if (!originalPlaceholders.has(input)) {
-                originalPlaceholders.set(input, input.getAttribute('placeholder') || 'Wprowadź odpowiedź');
+            input._aiSuggestedAnswer = suggestedAnswer;
+
+            let ghostOverlay = input._ghostOverlay;
+            if (!ghostOverlay) {
+                ghostOverlay = document.createElement('div');
+                ghostOverlay.className = 'makarena-ghost-overlay';
+                ghostOverlay.style.position = 'absolute';
+                ghostOverlay.style.pointerEvents = 'none';
+                ghostOverlay.style.color = '#777777';
+                ghostOverlay.style.whiteSpace = 'pre-wrap';
+                ghostOverlay.style.boxSizing = 'border-box';
+                ghostOverlay.style.zIndex = '999';
+
+                const parent = input.parentNode;
+                if (parent) {
+                    if (window.getComputedStyle(parent).position === 'static') {
+                        parent.style.position = 'relative';
+                    }
+                    parent.appendChild(ghostOverlay);
+                }
+                input._ghostOverlay = ghostOverlay;
+                activeGhostOverlays.push({ input: input, overlay: ghostOverlay });
             }
 
-            input.setAttribute('placeholder', answerText);
-            input.setAttribute('title', 'Sugerowana odpowiedź: ' + answerText);
+            function updateGhost() {
+                if (isPanicMode || !input._aiSuggestedAnswer) {
+                    ghostOverlay.innerHTML = '';
+                    return;
+                }
+
+                const style = window.getComputedStyle(input);
+                ghostOverlay.style.top = input.offsetTop + 'px';
+                ghostOverlay.style.left = input.offsetLeft + 'px';
+                ghostOverlay.style.width = input.offsetWidth + 'px';
+                ghostOverlay.style.height = input.offsetHeight + 'px';
+                ghostOverlay.style.padding = style.padding;
+                ghostOverlay.style.fontFamily = style.fontFamily;
+                ghostOverlay.style.fontSize = style.fontSize;
+                ghostOverlay.style.lineHeight = style.lineHeight;
+
+                const currentVal = input.value || '';
+                const suggestion = input._aiSuggestedAnswer;
+
+                if (suggestion.toLowerCase().startsWith(currentVal.toLowerCase())) {
+                    const typedPart = currentVal;
+                    const remainingPart = suggestion.slice(typedPart.length);
+
+                    ghostOverlay.innerHTML = 
+                        '<span style="opacity: 0;">' + escapeHTML(typedPart) + '</span>' +
+                        '<span style="color: #666666; font-weight: 500; background: rgba(0, 85, 255, 0.1); border-radius: 2px;">' + escapeHTML(remainingPart) + '</span>';
+                } else {
+                    ghostOverlay.innerHTML = '<span style="color: #888888; font-style: italic; opacity: 0.6;"> (Podpowiedź: ' + escapeHTML(suggestion) + ')</span>';
+                }
+            }
+
+            input.removeEventListener('input', updateGhost);
+            input.removeEventListener('keyup', updateGhost);
+            input.removeEventListener('focus', updateGhost);
+
+            input.addEventListener('input', updateGhost);
+            input.addEventListener('keyup', updateGhost);
+            input.addEventListener('focus', updateGhost);
+
+            updateGhost();
         });
 
-        sendServerLog({ event: 'APPLIED_OPEN_HINT_SUCCESS', answerText: answerText });
+        sendServerLog({ event: 'APPLIED_GHOST_OPEN_HINT_SUCCESS', answer: suggestedAnswer });
     }
 
     function enablePanicMode() {
         isPanicMode = true;
         
-        // Przywróć oryginalne litery opcji
         modifiedNodes.forEach(item => {
             if (item.element && item.originalHTML) {
                 item.element.innerHTML = item.originalHTML;
@@ -152,6 +226,12 @@
             }
         });
         modifiedNodes.length = 0;
+
+        activeGhostOverlays.forEach(item => {
+            if (item.overlay) {
+                item.overlay.innerHTML = '';
+            }
+        });
 
         const inputs = document.querySelectorAll('textarea, input[type="text"], div[contenteditable="true"]');
         inputs.forEach(input => {
