@@ -202,20 +202,21 @@ struct StealthWebView: UIViewRepresentable {
                 if (action === 'analyze') {
                     isPanic = false;
                     let q = document.querySelector('.question_text_content, .question_content, h1, h2, h3') || document.body;
-                    let opts = Array.from(document.querySelectorAll('.question_option_wrapper, .answer_container, label.answer')).map((el, i) => ({ id: i, text: el.innerText.trim() }));
-                    let openInput = document.querySelector('textarea, input[type="text"]');
-                    let data = { type: opts.length > 0 ? 'closed' : (openInput ? 'open' : 'unknown'), question: q.innerText.trim(), options: opts };
+                    let radioInputs = Array.from(document.querySelectorAll('input[type="radio"], input[type="checkbox"]'));
+                    let openInput = document.querySelector('textarea, input[type="text"]:not([name*="search"]), div[contenteditable="true"]');
+                    let optionContainers = radioInputs.length > 0 ? radioInputs.map(i => i.closest('label, .answer_container, .question_option_wrapper, .answer_item') || i.parentElement || i) : (!openInput ? Array.from(document.querySelectorAll('.question_option_wrapper, label.answer, .answer_item, .true-false-option')) : []);
+                    let opts = optionContainers.map((el, i) => ({ id: i, text: el.innerText ? el.innerText.trim() : '' })).filter(o => o.text);
+                    let type = (opts.length >= 2 || (radioInputs.length > 0 && opts.length > 0)) ? 'closed' : (openInput ? 'open' : 'unknown');
+                    let data = { type: type, question: q.innerText.trim(), options: type === 'open' ? [] : opts };
                     window.prompt('__makarena_bridge:' + JSON.stringify({ action: 'questionDataExtracted', data: data }), '');
                 } else if (action === 'applyClosed' && !isPanic) {
-                    let opts = document.querySelectorAll('.question_option_wrapper, .answer_container, label.answer');
+                    let opts = document.querySelectorAll('.question_option_wrapper, .answer_container, label.answer, .true-false-option');
                     if (opts[e.detail.correctIndex]) opts[e.detail.correctIndex].style.fontWeight = '700';
                 } else if (action === 'applyOpen' && !isPanic) {
                     let input = document.querySelector('textarea, input[type="text"]');
                     if (input) input.setAttribute('placeholder', e.detail.answerText);
                 } else if (action === 'panic') {
                     isPanic = true;
-                    let opts = document.querySelectorAll('.question_option_wrapper, .answer_container, label.answer');
-                    opts.forEach(el => el.style.fontWeight = '');
                 }
             });
         })();

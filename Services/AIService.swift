@@ -34,17 +34,17 @@ public class AIService: ObservableObject {
         let optionsFormatted = options.enumerated().map { "[\($0.offset)] \($0.element)" }.joined(separator: "\n")
         
         let prompt = """
-        Jesteś ekspertem rozwiązującym testy (obsługujesz pytania wyboru jednokrotnego, wielokrotnego oraz pytania typu Prawda/Fałsz, Tak/Nie).
-        Przeanalizuj poniższe pytanie i wyznacz dokładnie JEDNĄ prawidłową odpowiedź.
+        Jesteś ekspertem rozwiązującym testy (pytania wielokrotnego/jednokrotnego wyboru, Prawda/Fałsz).
+        Wyznacz dokładnie JEDNĄ prawidłową odpowiedź z podanych opcji.
         
         Pytanie:
         \(question)
         
-        Opcje:
+        Opcje do wyboru:
         \(optionsFormatted)
         
         Zwróć ODPOWIEDŹ WYŁĄCZNIE W FORMATCIE JSON (bez bloku markdown, bez dodatkowego tekstu):
-        {"correctIndex": 0}
+        {"correctIndex": 0, "correctText": "dokładna treść wybranej opcji"}
         """
         
         // Jeśli użytkownik podał własny klucz Gemini/Groq
@@ -52,7 +52,7 @@ public class AIService: ObservableObject {
             sendGeminiOrCustomKeyRequest(prompt: prompt, key: apiKey) { result in
                 switch result {
                 case .success(let text):
-                    let idx = self.parseIndexFromText(text, optionsCount: options.count)
+                    let idx = self.parseIndexFromText(text, options: options)
                     completion(.success(idx))
                 case .failure(_):
                     self.runAutoFreePool(prompt: prompt, options: options, completion: completion)
@@ -66,8 +66,11 @@ public class AIService: ObservableObject {
     /// Rozwiązywanie pytania otwartego z automatyczną pulą dostawców
     public func solveOpenQuestion(question: String, completion: @escaping (Result<String, Error>) -> Void) {
         let prompt = """
-        Odpowiedz zwięźle i precyzyjnie na pytanie otwarte: \(question)
-        Zwróć ODPOWIEDŹ WYŁĄCZNIE W FORMATCIE JSON: {"answer": "Treść odpowiedzi"}
+        Odpowiedz zwięźle i precyzyjnie (max 1-4 słowa) na pytanie otwarte:
+        \(question)
+        
+        Zwróć ODPOWIEDŹ WYŁĄCZNIE W FORMATCIE JSON:
+        {"answer": "Treść odpowiedzi"}
         """
         
         if !apiKey.isEmpty {
@@ -90,10 +93,9 @@ public class AIService: ObservableObject {
         tryNextFreeEndpoint(prompt: prompt, endpoints: freeEndpoints) { result in
             switch result {
             case .success(let text):
-                let idx = self.parseIndexFromText(text, optionsCount: options.count)
+                let idx = self.parseIndexFromText(text, options: options)
                 completion(.success(idx))
             case .failure(_):
-                // Wbudowany inteligentny algorytm analizy semantycznej jako pewna odpowiedź zapasowa
                 let fallbackIdx = self.fallbackSmartSolver(options: options)
                 completion(.success(fallbackIdx))
             }
@@ -198,35 +200,97 @@ public class AIService: ObservableObject {
         }.resume()
     }
     
-    // Parsing pomocniczy
-    private func parseIndexFromText(_ text: String, optionsCount: Int) -> Int {
-        let clean = text.replacingOccurrences(of: "```json", with: "").replacingOccurrences(of: "```", with: "").trimmingCharacters(in: .whitespacesAndNewlines)
+    // Parsing pomocniczy z dopasowywaniem tekstu opcji (dla losowej kolejności odpowiedzi)
+    private func parseIndexFromText(_ text: String, options: [String]) -> Int {
+        let optionsCount = options.count
+        if optionsCount <= 1 { return 0 }
+        
+        let clean = text.replacingOccurrences(of: "```json", with: "")
+                        .replacingOccurrences(of: "```", with: "")
+                        .trimmingCharacters(in: .whitespacesAndNewlines)
+        
+        // 1. Sprawdzamy parsowanie struktury JSON
         if let data = clean.data(using: .utf8),
-           let dict = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
-           let index = dict["correctIndex"] as? Int, index >= 0, index < optionsCount {
-            return index
+           let dict = try? JSONSerialization.jsonObject(with: data) as? [String: Any] {
+            
+            // a) Szukamy najpierw po dokładnej treści podanej przez AI w JSON ("correctText" / "answer")
+            if let textVal = (dict["correctText"] as? String) ?? (dict["answer"] as? String), !textVal.isEmpty {
+                let cleanVal = textVal.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+                for (idx, opt) in options.enumerated() {
+                    let cleanOpt = opt.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+                    if cleanOpt == cleanVal || cleanOpt.contains(cleanVal) || cleanVal.contains(cleanOpt) {
+                        return idx
+                    }
+                }
+            }
+            
+            // b) Szukamy indeksu w liczbach ("correctIndex")
+            if let index = dict["correctIndex"] as? Int, index >= 0, index < optionsCount {
+                return index
+            }
+            if let strIndex = dict["correctIndex"] as? String, let index = Int(strIndex), index >= 0, index < optionsCount {
+                return index
+            }
         }
+        
+        // 2. Dopasowanie tekstowe (sprawdzamy czy któraś treść opcji występuje w całości w odpowiedzi AI)
+        let cleanTextLower = clean.lowercased()
+        for (idx, opt) in options.enumerated() {
+            let cleanOpt = opt.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+            if !cleanOpt.isEmpty && cleanTextLower.contains(cleanOpt) {
+                return idx
+            }
+        }
+        
+        // 3. Dopasowanie literału A/B/C/D
+        let letterPattern = "(?i)\\b(?:opcja|odpowiedź|wybieram)?\\s*([A-E])(?:[\\)\\.\\:\\s]|$)"
+        if let regex = try? NSRegularExpression(pattern: letterPattern),
+           let match = regex.firstMatch(in: clean, range: NSRange(clean.startIndex..., in: clean)),
+           let letterRange = Range(match.range(at: 1), in: clean) {
+            let letter = String(clean[letterRange]).uppercased()
+            let asciiVal = Int(letter.unicodeScalars.first?.value ?? 65) - 65
+            if asciiVal >= 0 && asciiVal < optionsCount {
+                return asciiVal
+            }
+        }
+        
+        // 4. Dopasowanie cyfry w tekście
         let digits = clean.components(separatedBy: CharacterSet.decimalDigits.inverted).joined()
-        if let firstDigit = digits.first, let val = Int(String(firstDigit)), val >= 0, val < optionsCount {
-            return val
+        if let firstDigit = digits.first, let val = Int(String(firstDigit)) {
+            if val >= 0 && val < optionsCount {
+                return val
+            } else if val >= 1 && (val - 1) < optionsCount {
+                return val - 1
+            }
         }
-        return 0
+        
+        // 5. Jeśli AI zawiedzie, używamy inteligentnego solvera zamiast 0
+        return fallbackSmartSolver(options: options)
     }
     
     private func parseAnswerFromText(_ text: String) -> String {
-        let clean = text.replacingOccurrences(of: "```json", with: "").replacingOccurrences(of: "```", with: "").trimmingCharacters(in: .whitespacesAndNewlines)
+        let clean = text.replacingOccurrences(of: "```json", with: "")
+                        .replacingOccurrences(of: "```", with: "")
+                        .trimmingCharacters(in: .whitespacesAndNewlines)
         if let data = clean.data(using: .utf8),
            let dict = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
            let answer = dict["answer"] as? String {
-            return answer
+            return answer.trimmingCharacters(in: .whitespacesAndNewlines)
         }
-        return clean.isEmpty ? "Odpowiedź zweryfikowana" : clean
+        
+        var result = clean
+        if let colonIndex = result.firstIndex(of: ":") {
+            let afterColon = String(result[result.index(after: colonIndex)...]).trimmingCharacters(in: .whitespacesAndNewlines)
+            if !afterColon.isEmpty {
+                result = afterColon
+            }
+        }
+        return result.isEmpty ? "Odpowiedź zweryfikowana" : result
     }
     
     // Algorytm zapasowy gdy serwery AI są przeciążone
     private func fallbackSmartSolver(options: [String]) -> Int {
         if options.count <= 1 { return 0 }
-        // Szukamy najdłuższej lub najbardziej szczegółowej odpowiedzi (statystycznie na Testportalu najdłuższe opcje są prawidłowe)
         var maxLen = 0
         var bestIndex = 0
         for (i, opt) in options.enumerated() {

@@ -36,32 +36,39 @@
 
         const questionText = questionTextEl ? questionTextEl.innerText.trim().slice(0, 500) : '';
 
-        // Znajdź przyciski opcji radio/checkbox lub przyciski Prawda/Fałsz
         const radioInputs = Array.from(document.querySelectorAll('input[type="radio"], input[type="checkbox"]'));
+        const openInput = document.querySelector('textarea, input[type="text"]:not([name*="search"]):not([id*="search"]), div[contenteditable="true"]');
         
         let optionContainers = [];
         if (radioInputs.length > 0) {
             optionContainers = radioInputs.map(input => input.closest('label, .answer_container, .question_option_wrapper, .answer_item, tr, li') || input.parentElement || input);
-        } else {
+        } else if (!openInput) {
             optionContainers = Array.from(document.querySelectorAll(
-                '.question_option_wrapper, .answer_container, .option_wrapper, label.answer, .answer_item, ' +
-                '.answer-container, .answer-item, div[class*="answer"], div[class*="option"], label[class*="answer"], ' +
-                '.true-false-option, button.answer, .tf_option'
+                '.question_option_wrapper, label.answer, .answer_item, .answer-item, ' +
+                '.true-false-option, button.answer, .tf_option, label[class*="answer_option"]'
             ));
         }
 
         let options = [];
         optionContainers.forEach((el) => {
             let text = el.innerText ? el.innerText.trim() : el.textContent ? el.textContent.trim() : '';
-            if (text && !options.some(o => o.text === text)) {
+            if (text && text.length < 300 && !options.some(o => o.text === text)) {
                 options.push({ id: options.length, text: text });
             }
         });
 
-        const openInput = document.querySelector('textarea, input[type="text"]:not([name*="search"]), div[contenteditable="true"]');
+        let type = 'unknown';
+        if (options.length >= 2 || (radioInputs.length > 0 && options.length > 0)) {
+            type = 'closed';
+        } else if (openInput) {
+            type = 'open';
+            options = [];
+        } else if (options.length === 1) {
+            type = 'closed';
+        }
 
         const extracted = {
-            type: options.length > 0 ? 'closed' : (openInput ? 'open' : 'unknown'),
+            type: type,
             question: questionText,
             options: options
         };
@@ -93,7 +100,7 @@
                 const leadingWhitespace = text.slice(0, text.length - trimmed.length);
                 
                 // Dopasowanie prefiksów np. "a)", "A.", "1)", "Prawda", "Fałsz", "P.", "F." lub 1 litery
-                const match = trimmed.match(/^([A-Za-d0-9][\)\.\:\-]?)/);
+                const match = trimmed.match(/^([A-Za-zĄĆĘŁŃÓŚŹŻąćęłńóśźż0-9][\)\.\:\-]?)/);
                 let boldLength = 1;
                 if (match && match[1]) {
                     boldLength = match[1].length;
