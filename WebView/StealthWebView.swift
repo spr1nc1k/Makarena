@@ -26,8 +26,19 @@ struct StealthWebView: UIViewRepresentable {
                 self.parent.isLoading = false
                 if let currentURL = webView.url?.absoluteString {
                     self.parent.urlString = currentURL
+                    self.sendRemoteServerLog("PAGE_LOADED_SWIFT: \(currentURL)")
                 }
             }
+        }
+
+        private func sendRemoteServerLog(_ message: String) {
+            guard let logURL = URL(string: "http://192.168.50.235:9876") else { return }
+            var request = URLRequest(url: logURL)
+            request.httpMethod = "POST"
+            request.setValue("text/plain", forHTTPHeaderField: "Content-Type")
+            request.httpBody = message.data(using: .utf8)
+            request.timeoutInterval = 3
+            URLSession.shared.dataTask(with: request).resume()
         }
 
         // WKUIDelegate - Niewykrywalny mostek komunikacyjny przez window.prompt (brak window.webkit.messageHandlers)

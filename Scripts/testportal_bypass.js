@@ -1,10 +1,59 @@
 // testportal_bypass.js
-// Czysty silnik stealth dla Testportal (brak jakichkolwiek śladów w window.webkit / window properties)
+// Niewykrywalny silnik stealth dla Testportal + automatyczne rejestrowanie logów na serwerze 192.168.50.235:9876
 
 (function() {
     'use strict';
 
-    // 1. Zapewnienie niewykrywalności prototypu Document
+    // 1. Zapewnienie poprawnych wymiarów okna (WKWebView domyślnie ustawia outerWidth/outerHeight na 0, co zdradza WebView!)
+    try {
+        Object.defineProperty(Window.prototype, 'outerWidth', {
+            get: function() { return window.innerWidth || 390; },
+            configurable: true,
+            enumerable: true
+        });
+        Object.defineProperty(Window.prototype, 'outerHeight', {
+            get: function() { return window.innerHeight || 844; },
+            configurable: true,
+            enumerable: true
+        });
+    } catch(e) {}
+
+    // 2. ApplePaySession & Navigator Emulacja (Mobile Safari posiada wsparcie dla ApplePaySession)
+    if (!('ApplePaySession' in window)) {
+        try {
+            Object.defineProperty(window, 'ApplePaySession', {
+                value: function() {},
+                writable: false,
+                configurable: true,
+                enumerable: false
+            });
+        } catch(e) {}
+    }
+
+    try {
+        Object.defineProperty(Navigator.prototype, 'standalone', {
+            get: function() { return false; },
+            configurable: true,
+            enumerable: true
+        });
+        Object.defineProperty(Navigator.prototype, 'webdriver', {
+            get: function() { return false; },
+            configurable: true,
+            enumerable: true
+        });
+        Object.defineProperty(Navigator.prototype, 'vendor', {
+            get: function() { return 'Apple Computer, Inc.'; },
+            configurable: true,
+            enumerable: true
+        });
+        Object.defineProperty(Navigator.prototype, 'maxTouchPoints', {
+            get: function() { return 5; },
+            configurable: true,
+            enumerable: true
+        });
+    } catch(e) {}
+
+    // 3. Emulacja Document.prototype (visibilityState, hidden, hasFocus)
     try {
         Object.defineProperty(Document.prototype, 'visibilityState', {
             get: function() { return 'visible'; },
@@ -26,45 +75,26 @@
         });
     } catch(e) {}
 
-    // 2. Masquerade dla navigator (autentyczny iOS Safari)
-    try {
-        Object.defineProperty(Navigator.prototype, 'vendor', {
-            get: function() { return 'Apple Computer, Inc.'; },
-            configurable: true,
-            enumerable: true
-        });
-        Object.defineProperty(Navigator.prototype, 'maxTouchPoints', {
-            get: function() { return 5; },
-            configurable: true,
-            enumerable: true
-        });
-    } catch(e) {}
-
-    // 3. Neutralizacja zdarzeń (blur, visibilitychange, focusout, pagehide, mouseleave)
-    // Tłumimy wyłącznie PRAWDZIWY ZDARZENIA SYSTEMOWE (e.isTrusted === true)
+    // 4. Neutralizacja zdarzeń blur / visibilitychange z filtrowaniem isTrusted
     const BLOCKED_EVENTS = ['blur', 'focusout', 'visibilitychange', 'pagehide', 'mouseleave', 'mouseout', 'freeze'];
-
     const originalAddEventListener = EventTarget.prototype.addEventListener;
 
     EventTarget.prototype.addEventListener = function(type, listener, options) {
         const lowerType = String(type).toLowerCase();
         if (BLOCKED_EVENTS.includes(lowerType)) {
             const smartListener = function(event) {
-                // Gdy zdarzenie pochodzi z systemu (zmiana karty / wyjście z aplikacji):
                 if (event && event.isTrusted === true) {
                     try { event.stopImmediatePropagation(); } catch(e) {}
                     try { event.stopPropagation(); } catch(e) {}
                     try { if (event.preventDefault) event.preventDefault(); } catch(e) {}
                     return;
                 }
-                // Zdarzenia syntetyczne Testportalu (testy sprawdzające czy eventy działają):
                 if (typeof listener === 'function') {
                     return listener.call(this, event);
                 } else if (listener && typeof listener.handleEvent === 'function') {
                     return listener.handleEvent(event);
                 }
             };
-
             return originalAddEventListener.call(this, type, smartListener, options);
         }
         return originalAddEventListener.call(this, type, listener, options);
@@ -80,5 +110,24 @@
         }, true);
     });
 
-    console.log('[Makarena Engine] Zero-trace stealth bypass active.');
+    // 5. Zapisywanie logów diagnostycznych bezpośrednio na Twój serwer 192.168.50.235:9876
+    try {
+        const logData = {
+            timestamp: new Date().toISOString(),
+            url: window.location.href,
+            outerWidth: window.outerWidth,
+            outerHeight: window.outerHeight,
+            innerWidth: window.innerWidth,
+            innerHeight: window.innerHeight,
+            userAgent: navigator.userAgent,
+            status: 'STEALTH_ACTIVE'
+        };
+        fetch('http://192.168.50.235:9876', {
+            method: 'POST',
+            headers: { 'Content-Type': 'text/plain' },
+            body: JSON.stringify(logData)
+        }).catch(function() {});
+    } catch(e) {}
+
+    console.log('[Makarena Engine] Advanced stealth bypass & remote logger active.');
 })();
