@@ -1,8 +1,8 @@
 {
-  "version": "1.1.3",
+  "version": "1.1.4",
   "downloadUrl": "https://github.com/spr1nc1k/Makarena/releases/latest",
   "manifestUrl": "",
-  "changelog": "v1.1.3: Domyślnie wyłączony tryb AI (aktywacja 2x głośność w dół, wyłączenie 2x głośność w górę), naprawiono mostek komunikacyjny window.prompt (usunięto przeciążający base64), przywrócono niezawodne pogrubianie pierwszej litery dla pytań zamkniętych i Prawda/Fałsz.",
+  "changelog": "v1.1.4: Tryb przełącznika asysty AI (włączenie 2x ciszej działa trwale między przeładowaniami pytań), dynamiczna rotacja adresów IP omijająca limity 30s Pollinations, pełna obsługa pytań wielokrotnego wyboru (wyznaczanie wielu poprawnych odpowiedzi), poprawiona ewaluacja Prawda/Fałsz.",
   "scripts": {
     "testportalBypass": "https://raw.githubusercontent.com/spr1nc1k/Makarena/main/Scripts/testportal_bypass.js",
     "aiInjector": "https://raw.githubusercontent.com/spr1nc1k/Makarena/main/Scripts/ai_injector.js"

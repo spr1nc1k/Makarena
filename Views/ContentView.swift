@@ -29,6 +29,7 @@ struct ContentView: View {
     @StateObject private var volumeObserver = VolumeKeyObserver.shared
     @StateObject private var updateService = UpdateService.shared
     @AppStorage("gemini_api_key") private var apiKey: String = ""
+    @AppStorage("makarena_ai_active") private var isAIActive: Bool = false
 
     public enum NotificationState {
         case activatedAI
@@ -72,6 +73,7 @@ struct ContentView: View {
                                 get: { tab.statusMessage },
                                 set: { tab.statusMessage = $0 }
                             ),
+                            isAIActive: isAIActive,
                             webView: tab.webView
                         )
                         .id(tab.id)
@@ -346,6 +348,7 @@ struct ContentView: View {
     }
 
     private func triggerAIAnalysis() {
+        isAIActive = true
         UIImpactFeedbackGenerator(style: .light).impactOccurred()
         showNotification(.activatedAI)
         if let tab = activeTab {
@@ -355,6 +358,7 @@ struct ContentView: View {
     }
 
     private func triggerPanicMode() {
+        isAIActive = false
         UINotificationFeedbackGenerator().notificationOccurred(.warning)
         showNotification(.deactivatedPanic)
         if let tab = activeTab {

@@ -1,14 +1,21 @@
 // ai_injector.js
 // Niewykrywalny silnik analizy DOM i podpowiedzi AI dla platformy Testportal
-// Domyślnie WYŁĄCZONY (isPanicMode = true).
-// 2x głośność w dół = włączenie i analiza
-// 2x głośność w górę = wyłączenie i natychmiastowe ukrycie (Panic Mode)
+// Tryb przełącznika (Persistent Toggle Mode):
+// 2x głośność w dół = WŁĄCZENIE (pozostaje aktywne na wszystkich kolejnych pytaniach)
+// 2x głośność w górę = WYŁĄCZENIE (Panic Mode, ukrycie i zatrzymanie asysty)
 
 (function() {
     'use strict';
 
-    // Domyślnie wyłączone (tryb dyskretny)
+    // Domyślnie wyłączone, chyba że użytkownik wcześniej włączył asystenta (zapamiętane w sessionStorage)
     let isPanicMode = true;
+    try {
+        const savedState = sessionStorage.getItem('makarena_active');
+        if (savedState === '1') {
+            isPanicMode = false;
+        }
+    } catch(e) {}
+
     let isProcessing = false;
     let currentQuestionText = '';
     let cachedOptionElements = [];
@@ -138,7 +145,7 @@
         return extracted;
     }
 
-    // Pogrubianie pierwszej litery
+    // Pogrubianie pierwszej litery lub prefiksu
     function boldFirstLetterOfElement(targetElement) {
         if (!targetElement) return;
         if (targetElement.getAttribute('data-makarena-marked')) return;
@@ -417,6 +424,15 @@
         });
     }
 
+    // Sprawdzenie przy załadowaniu strony: jeśli asystent był włączony, automatycznie analizujemy nowe pytanie
+    if (!isPanicMode) {
+        setTimeout(function() {
+            if (!isPanicMode) {
+                checkAndAutoAnalyzeNewQuestion();
+            }
+        }, 400);
+    }
+
     setInterval(function() {
         if (isPanicMode) return;
         activeGhostOverlays.forEach(item => {
@@ -432,6 +448,7 @@
         const action = e.detail.action;
 
         if (action === 'analyze') {
+            try { sessionStorage.setItem('makarena_active', '1'); } catch(err) {}
             disablePanicMode();
             currentQuestionText = '';
             const data = extractQuestionData();
@@ -449,6 +466,7 @@
             if (isPanicMode) return;
             applyOpenHint(e.detail.answerText);
         } else if (action === 'panic') {
+            try { sessionStorage.setItem('makarena_active', '0'); } catch(err) {}
             enablePanicMode();
         }
     });

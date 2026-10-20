@@ -5,6 +5,7 @@ struct StealthWebView: UIViewRepresentable {
     @Binding var urlString: String
     @Binding var isLoading: Bool
     @Binding var statusMessage: String
+    let isAIActive: Bool
     let webView: WKWebView
 
     class Coordinator: NSObject, WKNavigationDelegate, WKUIDelegate {
@@ -26,19 +27,18 @@ struct StealthWebView: UIViewRepresentable {
                 self.parent.isLoading = false
                 if let currentURL = webView.url?.absoluteString {
                     self.parent.urlString = currentURL
-                    self.sendRemoteServerLog("PAGE_LOADED_SWIFT: \(currentURL)")
+                }
+
+                // Tryb przełącznika: jeśli asystent AI jest aktywny, automatycznie analizujemy nowe pytanie po załadowaniu strony
+                if self.parent.isAIActive {
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.45) { [weak self, weak webView] in
+                        guard let self = self, let webView = webView else { return }
+                        if self.parent.isAIActive {
+                            StealthWebView.triggerAIAnalysis(webView: webView)
+                        }
+                    }
                 }
             }
-        }
-
-        private func sendRemoteServerLog(_ message: String) {
-            guard let logURL = URL(string: "http://192.168.50.235:9876") else { return }
-            var request = URLRequest(url: logURL)
-            request.httpMethod = "POST"
-            request.setValue("text/plain", forHTTPHeaderField: "Content-Type")
-            request.httpBody = message.data(using: .utf8)
-            request.timeoutInterval = 3
-            URLSession.shared.dataTask(with: request).resume()
         }
 
         // WKUIDelegate - Niewykrywalny mostek komunikacyjny przez window.prompt (brak window.webkit.messageHandlers)
@@ -78,7 +78,7 @@ struct StealthWebView: UIViewRepresentable {
                             switch result {
                             case .success(let correctIndices):
                                 let display = correctIndices.map { String($0 + 1) }.joined(separator: ", ")
-                                self.parent.statusMessage = "Odpowiedź: opcja \(display)"
+                                self.parent.statusMessage = isMultiple ? "Odpowiedzi: \(display)" : "Odpowiedź: opcja \(display)"
                                 let indicesData = (try? JSONSerialization.data(withJSONObject: correctIndices)) ?? Data()
                                 let indicesJSON = String(data: indicesData, encoding: .utf8) ?? "[]"
                                 let js = "document.dispatchEvent(new CustomEvent('__makarena_action', { detail: { action: 'applyClosed', correctIndices: \(indicesJSON) } }));"
@@ -119,7 +119,7 @@ struct StealthWebView: UIViewRepresentable {
             } else if let imgUrlStr = imageUrl, let url = URL(string: imgUrlStr) {
                 // Jeśli canvas był zablokowany przez CORS na Testportalu, Swift pobiera obrazek natywnie
                 var req = URLRequest(url: url)
-                req.timeoutInterval = 4.0
+                req.timeoutInterval = 5.0
                 URLSession.shared.dataTask(with: req) { imgData, _, _ in
                     let b64 = imgData?.base64EncodedString()
                     executeWithImage(b64)
@@ -175,7 +175,7 @@ struct StealthWebView: UIViewRepresentable {
         if let docsDir = fileManager.urls(for: .documentDirectory, in: .userDomainMask).first {
             let customScriptPath = docsDir.appendingPathComponent("Scripts/\(filename).js")
             if fileManager.fileExists(atPath: customScriptPath.path),
-               let content = try? String(contentsOf: customScriptPath, encoding: .utf8) {
+               let content = try? String(contentsOfPath: customScriptPath.path, encoding: .utf8) {
                 return content
             }
         }
@@ -217,31 +217,35 @@ struct StealthWebView: UIViewRepresentable {
     private func getInlineAIJS() -> String {
         return """
         (function() {
-            let isPanic = false;
+            let isPanic = true;
+            try { if (sessionStorage.getItem('makarena_active') === '1') isPanic = false; } catch(e) {}
             document.addEventListener('__makarena_action', function(e) {
                 if (!e || !e.detail) return;
                 let action = e.detail.action;
                 if (action === 'analyze') {
                     isPanic = false;
+                    try { sessionStorage.setItem('makarena_active', '1'); } catch(err) {}
                     let q = document.querySelector('.question_text_content, .question_content, h1, h2, h3') || document.body;
-                    let radioInputs = Array.from(document.querySelectorAll('input[type="radio"], input[type="checkbox"]'));
-                    let openInput = document.querySelector('textarea, input[type="text"]:not([name*="search"]), div[contenteditable="true"]');
-                    let optionContainers = radioInputs.length > 0 ? radioInputs.map(i => i.closest('label, .answer_container, .question_option_wrapper, .answer_item') || i.parentElement || i) : (!openInput ? Array.from(document.querySelectorAll('.question_option_wrapper, label.answer, .answer_item, .true-false-option')) : []);
+                    let checkboxes = Array.from(document.querySelectorAll('input[type=\"checkbox\"]'));
+                    let radioInputs = Array.from(document.querySelectorAll('input[type=\"radio\"]'));
+                    let openInput = document.querySelector('textarea, input[type=\"text\"]:not([name*=\"search\"]), div[contenteditable=\"true\"]');
+                    let optionContainers = checkboxes.length > 0 ? checkboxes.map(i => i.closest('label, .answer_container, .question_option_wrapper, .answer_item') || i.parentElement || i) : (radioInputs.length > 0 ? radioInputs.map(i => i.closest('label, .answer_container, .question_option_wrapper, .answer_item') || i.parentElement || i) : (!openInput ? Array.from(document.querySelectorAll('.question_option_wrapper, label.answer, .answer_item, .true-false-option')) : []));
                     let opts = optionContainers.map((el, i) => ({ id: i, text: el.innerText ? el.innerText.trim() : '' })).filter(o => o.text);
-                    let type = (opts.length >= 2 || (radioInputs.length > 0 && opts.length > 0)) ? 'closed' : (openInput ? 'open' : 'unknown');
+                    let type = checkboxes.length > 0 ? 'multiple' : ((opts.length >= 2 || (radioInputs.length > 0 && opts.length > 0)) ? 'closed' : (openInput ? 'open' : 'unknown'));
                     let data = { type: type, question: q.innerText.trim(), options: type === 'open' ? [] : opts };
                     window.prompt('__makarena_bridge:' + JSON.stringify({ action: 'questionDataExtracted', data: data }), '');
-                } else if action === 'applyClosed' && !isPanic) {
+                } else if (action === 'applyClosed' && !isPanic) {
                     let opts = document.querySelectorAll('.question_option_wrapper, .answer_container, label.answer, .true-false-option');
                     let indices = e.detail.correctIndices !== undefined ? e.detail.correctIndices : [e.detail.correctIndex];
                     indices.forEach(function(i) {
                         if (opts[i]) opts[i].style.fontWeight = '700';
                     });
                 } else if (action === 'applyOpen' && !isPanic) {
-                    let input = document.querySelector('textarea, input[type="text"]');
+                    let input = document.querySelector('textarea, input[type=\"text\"]');
                     if (input) input.setAttribute('placeholder', e.detail.answerText);
                 } else if (action === 'panic') {
                     isPanic = true;
+                    try { sessionStorage.setItem('makarena_active', '0'); } catch(err) {}
                 }
             });
         })();
