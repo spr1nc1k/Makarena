@@ -1,11 +1,14 @@
 // ai_injector.js
 // Niewykrywalny silnik analizy DOM i podpowiedzi AI dla platformy Testportal
-// Pełna obsługa pytań jednokrotnego i wielokrotnego wyboru (MDC), Prawda/Fałsz, pytań otwartych oraz ekstrakcji obrazów
+// Domyślnie WYŁĄCZONY (isPanicMode = true).
+// 2x głośność w dół = włączenie i analiza
+// 2x głośność w górę = wyłączenie i natychmiastowe ukrycie (Panic Mode)
 
 (function() {
     'use strict';
 
-    let isPanicMode = false;
+    // Domyślnie wyłączone (tryb dyskretny)
+    let isPanicMode = true;
     let isProcessing = false;
     let currentQuestionText = '';
     let cachedOptionElements = [];
@@ -18,42 +21,24 @@
         return str.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
     }
 
-    // Ekstrakcja obrazu z pytania (zarówno URL jak i base64 z canvas)
-    function extractQuestionImageData() {
-        // Na Testportalu grafika pytania znajduje się w .question_essence img lub #questionForm img
+    // Ekstrakcja URL obrazu pytania (przesyłamy wyłącznie URL, bajty pobiera Swift natywnie bez ograniczeń CORS)
+    function extractQuestionImageUrl() {
         const img = document.querySelector(
             '.question_essence img, .question_content img, [class*="question"] img, #questionForm img, .question_image img'
         );
 
-        if (!img) return { url: null, base64: null };
+        if (!img) return null;
 
         const src = img.src || '';
         if (src.includes('logo') || src.includes('avatar') || src.includes('icon_')) {
-            return { url: null, base64: null };
+            return null;
         }
 
-        let base64 = null;
-        try {
-            const canvas = document.createElement('canvas');
-            canvas.width = img.naturalWidth || img.width || 300;
-            canvas.height = img.naturalHeight || img.height || 200;
-            const ctx = canvas.getContext('2d');
-            ctx.drawImage(img, 0, 0);
-            const dataUrl = canvas.toDataURL('image/jpeg', 0.85);
-            if (dataUrl && dataUrl.startsWith('data:image')) {
-                base64 = dataUrl.split(',')[1];
-            }
-        } catch(e) {
-            // W razie ograniczeń CORS w canvasie zwracamy sam URL - Swift pobierze bajty natywnie
-        }
-
-        return { url: src, base64: base64 };
+        return src;
     }
 
     // Główna ekstrakcja danych pytania i wariantów odpowiedzi
     function extractQuestionData() {
-        if (isPanicMode) return null;
-
         // 1. Treść pytania
         const questionTextEl = document.querySelector(
             '.question_essence, .question_text_content, .question_content, .question-text, .question_text, ' +
@@ -62,52 +47,46 @@
 
         const questionText = questionTextEl ? questionTextEl.innerText.trim().slice(0, 1000) : '';
 
-        // 2. Grafika pytania
-        const imgData = extractQuestionImageData();
+        // 2. URL obrazu
+        const imgUrl = extractQuestionImageUrl();
 
-        // 3. Rozpoznanie typu formularza na Testportalu
-        // Kontenery odpowiedzi na Testportalu to zawsze .answer_container
-        let containers = Array.from(document.querySelectorAll(
-            '.answer_container, .question_answers .answer, #questionForm .question_option_wrapper, .true-false-option, .tf_option'
-        ));
-
-        // Sprawdzamy obecność checkboxów (wielokrotny wybór) i radio (jednokrotny / Prawda-Fałsz)
+        // 3. Wejścia wyboru (MDC / radio / checkbox)
         const checkboxes = Array.from(document.querySelectorAll(
-            '#questionForm input[type="checkbox"], .question_answers .mdc-checkbox, input[type="checkbox"]'
+            '#questionForm input[type="checkbox"], input[type="checkbox"]'
         ));
         const radioInputs = Array.from(document.querySelectorAll(
-            '#questionForm input[type="radio"], .question_answers .mdc-radio, input[type="radio"]'
+            '#questionForm input[type="radio"], input[type="radio"]'
         ));
-
-        // Jeśli kontenery .answer_container nie zostały znalezione bezpośrednio, szukamy po inputach
-        if (containers.length === 0) {
-            if (checkboxes.length > 0) {
-                containers = checkboxes.map(i => i.closest('.answer_container, label, .question_option_wrapper, tr, li') || i.parentElement || i);
-            } else if (radioInputs.length > 0) {
-                containers = radioInputs.map(i => i.closest('.answer_container, label, .question_option_wrapper, tr, li') || i.parentElement || i);
-            }
-        }
 
         // Pytanie otwarte
         const openInput = document.querySelector(
             '.mdc-text-field__input, .all_short_answers input, textarea, input[type="text"]:not([name*="search"]), #givenAnswer_ifr, div[contenteditable="true"]'
         );
 
+        // Kontenery odpowiedzi
+        let containers = [];
+        if (checkboxes.length > 0) {
+            containers = checkboxes.map(i => i.closest('.answer_container, label, .question_option_wrapper, .answer_item, tr, li') || i.parentElement || i);
+        } else if (radioInputs.length > 0) {
+            containers = radioInputs.map(i => i.closest('.answer_container, label, .question_option_wrapper, .answer_item, tr, li') || i.parentElement || i);
+        } else if (!openInput) {
+            containers = Array.from(document.querySelectorAll(
+                '.answer_container, .question_answers .answer, #questionForm .question_option_wrapper, label.answer, .true-false-option, .tf_option'
+            ));
+        }
+
         let options = [];
         const resolvedContainers = [];
 
         containers.forEach((el) => {
-            // Szukamy tekstu odpowiedzi - na Testportalu w .answer_text lub bezpośrednio w kontenerze
-            const textEl = el.querySelector('.answer_text, .mdc-form-field label, .option_text, span') || el;
-            let text = textEl.innerText ? textEl.innerText.trim() : el.innerText ? el.innerText.trim() : '';
-            
+            let text = el.innerText ? el.innerText.trim() : el.textContent ? el.textContent.trim() : '';
             if (text && text.length < 300 && !options.some(o => o.text === text)) {
                 options.push({ id: options.length, text: text });
                 resolvedContainers.push(el);
             }
         });
 
-        // Specjalna detekcja dla pytań Prawda / Fałsz gdy Testportal używa niestandardowych kafelków
+        // Specjalna detekcja dla pytań Prawda / Fałsz
         if (options.length === 0 && !openInput) {
             const tfKeywords = ['prawda', 'fałsz', 'true', 'false'];
             const allElements = Array.from(document.querySelectorAll('label, div, button, span, td'));
@@ -153,23 +132,19 @@
             type: type,
             question: questionText,
             options: options,
-            imageUrl: imgData.url,
-            imageBase64: imgData.base64
+            imageUrl: imgUrl
         };
 
         return extracted;
     }
 
-    // Pogrubianie pierwszej litery właściwego elementu odpowiedzi
+    // Pogrubianie pierwszej litery
     function boldFirstLetterOfElement(targetElement) {
         if (!targetElement) return;
         if (targetElement.getAttribute('data-makarena-marked')) return;
 
-        // Szukamy bezpośredniego elementu tekstowego w .answer_text (specyfika Testportalu)
-        const textContainer = targetElement.querySelector('.answer_text, .mdc-form-field label, .option_text') || targetElement;
-
         // 1. Sprawdzamy czy istnieje bezpośredni span z literą opcji (A., B., 1., itp.)
-        const letterSpan = textContainer.querySelector('.option_letter, .answer_letter, .letter, [class*="letter"]');
+        const letterSpan = targetElement.querySelector('.option_letter, .answer_letter, .letter, [class*="letter"]');
         if (letterSpan) {
             const orig = letterSpan.innerText;
             isProcessing = true;
@@ -180,8 +155,8 @@
             return;
         }
 
-        // 2. Przeszukujemy węzły tekstowe
-        const walker = document.createTreeWalker(textContainer, NodeFilter.SHOW_TEXT, null, false);
+        // 2. Przeszukujemy węzły tekstowe bezpośrednio w kontenerze odpowiedzi
+        const walker = document.createTreeWalker(targetElement, NodeFilter.SHOW_TEXT, null, false);
         let node = walker.nextNode();
         while (node) {
             const text = node.nodeValue;
@@ -255,9 +230,17 @@
         let targets = cachedOptionElements;
 
         if (!targets || targets.length === 0) {
-            targets = Array.from(document.querySelectorAll(
-                '.answer_container, .question_answers .answer, #questionForm .question_option_wrapper, .true-false-option'
-            ));
+            const checkboxes = Array.from(document.querySelectorAll('input[type="checkbox"]'));
+            const radioInputs = Array.from(document.querySelectorAll('input[type="radio"]'));
+            if (checkboxes.length > 0) {
+                targets = checkboxes.map(i => i.closest('.answer_container, label, .question_option_wrapper, tr, li') || i.parentElement || i);
+            } else if (radioInputs.length > 0) {
+                targets = radioInputs.map(i => i.closest('.answer_container, label, .question_option_wrapper, tr, li') || i.parentElement || i);
+            } else {
+                targets = Array.from(document.querySelectorAll(
+                    '.answer_container, .question_option_wrapper, label.answer, .answer_item, .true-false-option, [class*="answer"]'
+                ));
+            }
         }
 
         indices.forEach(idx => {
@@ -320,7 +303,6 @@
             return;
         }
 
-        // Specyficzne pola wejściowe Testportalu: .mdc-text-field__input, .all_short_answers input, textarea, #givenAnswer_ifr
         const inputs = document.querySelectorAll(
             '.mdc-text-field__input, .all_short_answers input, textarea, input[type="text"]:not([name*="search"]), div[contenteditable="true"]'
         );
@@ -382,7 +364,7 @@
         });
     }
 
-    // Panic Mode — natychmiastowe usunięcie wszelkich śladów wizualnych
+    // Panic Mode — natychmiastowe ukrycie wszelkich śladów wizualnych
     function enablePanicMode() {
         isPanicMode = true;
         revertModifications();
@@ -422,6 +404,7 @@
     }
 
     const mutationObserver = new MutationObserver(function() {
+        if (isPanicMode) return;
         if (isProcessing) return;
         checkAndAutoAnalyzeNewQuestion();
     });
@@ -443,6 +426,7 @@
         });
     }, 600);
 
+    // Nasłuch zdarzeń sterowania ze Swift
     document.addEventListener('__makarena_action', function(e) {
         if (!e || !e.detail) return;
         const action = e.detail.action;
@@ -458,9 +442,11 @@
                 }), '');
             }
         } else if (action === 'applyClosed') {
+            if (isPanicMode) return;
             const indices = e.detail.correctIndices !== undefined ? e.detail.correctIndices : [e.detail.correctIndex];
             applyClosedHint(indices);
         } else if (action === 'applyOpen') {
+            if (isPanicMode) return;
             applyOpenHint(e.detail.answerText);
         } else if (action === 'panic') {
             enablePanicMode();

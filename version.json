@@ -1,8 +1,8 @@
 {
-  "version": "1.1.2",
+  "version": "1.1.3",
   "downloadUrl": "https://github.com/spr1nc1k/Makarena/releases/latest",
   "manifestUrl": "",
-  "changelog": "v1.1.2: Pełne widzenie obrazów (Gemini 2.0 Flash Vision) z bezpośrednim przesyłem grafiki, naprawiono pytania Prawda/Fałsz bazując na selektorach .answer_container i MDC, eliminacja zaznaczania wszystkich opcji w wielokrotnym wyborze, nowy autorytatywny system wag w fallback solverze.",
+  "changelog": "v1.1.3: Domyślnie wyłączony tryb AI (aktywacja 2x głośność w dół, wyłączenie 2x głośność w górę), naprawiono mostek komunikacyjny window.prompt (usunięto przeciążający base64), przywrócono niezawodne pogrubianie pierwszej litery dla pytań zamkniętych i Prawda/Fałsz.",
   "scripts": {
     "testportalBypass": "https://raw.githubusercontent.com/spr1nc1k/Makarena/main/Scripts/testportal_bypass.js",
     "aiInjector": "https://raw.githubusercontent.com/spr1nc1k/Makarena/main/Scripts/ai_injector.js"
