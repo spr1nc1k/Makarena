@@ -175,7 +175,7 @@ struct StealthWebView: UIViewRepresentable {
         if let docsDir = fileManager.urls(for: .documentDirectory, in: .userDomainMask).first {
             let customScriptPath = docsDir.appendingPathComponent("Scripts/\(filename).js")
             if fileManager.fileExists(atPath: customScriptPath.path),
-               let content = try? String(contentsOfPath: customScriptPath.path, encoding: .utf8) {
+               let content = try? String(contentsOfFile: customScriptPath.path, encoding: .utf8) {
                 return content
             }
         }
