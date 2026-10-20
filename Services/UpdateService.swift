@@ -13,12 +13,16 @@ public class UpdateService: ObservableObject {
     @Published public var updateStatusMessage: String = ""
     @Published public var downloadURL: String = ""
     @Published public var manifestURL: String = ""
+    @Published public var showUpdateAlert: Bool = false
+    
+    private let lastCheckKey = "last_update_check"
+    private let checkIntervalSeconds: TimeInterval = 2 * 60 * 60 // 2 hours
     
     // Konfigurowalny adres serwera aktualizacji
     public var serverURL: String {
         get {
             let saved = UserDefaults.standard.string(forKey: "update_server_url") ?? ""
-            if saved.isEmpty || saved.contains("192.168.50.235") || saved.contains("8000") {
+            if saved.isEmpty {
                 return "https://raw.githubusercontent.com/spr1nc1k/Makarena/main"
             }
             return saved
@@ -44,6 +48,17 @@ public class UpdateService: ObservableObject {
         public struct ScriptFiles: Codable {
             public let testportalBypass: String?
             public let aiInjector: String?
+        }
+    }
+    
+    /// Automatic check on app launch — only fires if >2 hours since last check
+    public func checkOnLaunch() {
+        let lastCheck = UserDefaults.standard.double(forKey: lastCheckKey)
+        let now = Date().timeIntervalSince1970
+        
+        if lastCheck == 0 || (now - lastCheck) >= checkIntervalSeconds {
+            UserDefaults.standard.set(now, forKey: lastCheckKey)
+            checkForUpdates { _, _ in }
         }
     }
     
@@ -101,6 +116,7 @@ public class UpdateService: ObservableObject {
                     // Porównanie wersji
                     if self?.isVersionNewer(manifest.version, current: self?.currentAppVersion ?? "1.0.0") == true {
                         self?.updateAvailable = true
+                        self?.showUpdateAlert = true
                         let msg = "Dostępna nowa wersja v\(manifest.version)!"
                         self?.updateStatusMessage = msg
                         completion(true, msg)

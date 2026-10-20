@@ -34,17 +34,18 @@ public class AIService: ObservableObject {
         let optionsFormatted = options.enumerated().map { "[\($0.offset)] \($0.element)" }.joined(separator: "\n")
         
         let prompt = """
-        Jesteś ekspertem rozwiązującym testy (pytania wielokrotnego/jednokrotnego wyboru, Prawda/Fałsz).
-        Wyznacz dokładnie JEDNĄ prawidłową odpowiedź z podanych opcji.
+        You are an expert test solver. You solve multiple-choice, single-choice, True/False, and Prawda/Fałsz questions.
+        Determine exactly ONE correct answer from the provided options.
+        Do NOT default to index 0. Actually analyze the question and all options before choosing.
         
-        Pytanie:
+        Question:
         \(question)
         
-        Opcje do wyboru:
+        Options:
         \(optionsFormatted)
         
-        Zwróć ODPOWIEDŹ WYŁĄCZNIE W FORMATCIE JSON (bez bloku markdown, bez dodatkowego tekstu):
-        {"correctIndex": 0, "correctText": "dokładna treść wybranej opcji"}
+        Return ONLY valid JSON (no markdown code blocks, no extra text):
+        {"correctIndex": 2, "correctText": "exact text of chosen option"}
         """
         
         // Jeśli użytkownik podał własny klucz Gemini/Groq
@@ -55,22 +56,25 @@ public class AIService: ObservableObject {
                     let idx = self.parseIndexFromText(text, options: options)
                     completion(.success(idx))
                 case .failure(_):
-                    self.runAutoFreePool(prompt: prompt, options: options, completion: completion)
+                    self.runAutoFreePool(prompt: prompt, options: options, question: question, completion: completion)
                 }
             }
         } else {
-            runAutoFreePool(prompt: prompt, options: options, completion: completion)
+            runAutoFreePool(prompt: prompt, options: options, question: question, completion: completion)
         }
     }
     
     /// Rozwiązywanie pytania otwartego z automatyczną pulą dostawców
     public func solveOpenQuestion(question: String, completion: @escaping (Result<String, Error>) -> Void) {
         let prompt = """
-        Odpowiedz zwięźle i precyzyjnie (max 1-4 słowa) na pytanie otwarte:
+        You are an expert test solver. Answer the following open-ended question.
+        Odpowiedz krótko i precyzyjnie.
+        
+        Question:
         \(question)
         
-        Zwróć ODPOWIEDŹ WYŁĄCZNIE W FORMATCIE JSON:
-        {"answer": "Treść odpowiedzi"}
+        Return ONLY valid JSON (no markdown code blocks, no extra text):
+        {"answer": "Your answer here"}
         """
         
         if !apiKey.isEmpty {
@@ -89,14 +93,14 @@ public class AIService: ObservableObject {
     }
     
     // MARK: - Automatyczne przechodzenie po puli darmowych serwerów AI
-    private func runAutoFreePool(prompt: String, options: [String], completion: @escaping (Result<Int, Error>) -> Void) {
+    private func runAutoFreePool(prompt: String, options: [String], question: String, completion: @escaping (Result<Int, Error>) -> Void) {
         tryNextFreeEndpoint(prompt: prompt, endpoints: freeEndpoints) { result in
             switch result {
             case .success(let text):
                 let idx = self.parseIndexFromText(text, options: options)
                 completion(.success(idx))
             case .failure(_):
-                let fallbackIdx = self.fallbackSmartSolver(options: options)
+                let fallbackIdx = self.fallbackSmartSolver(question: question, options: options)
                 completion(.success(fallbackIdx))
             }
         }
@@ -129,7 +133,7 @@ public class AIService: ObservableObject {
                 return
             }
             var req = URLRequest(url: url)
-            req.timeoutInterval = 4.0
+            req.timeoutInterval = 15.0
             URLSession.shared.dataTask(with: req) { data, _, err in
                 if let data = data, let text = String(data: data, encoding: .utf8), !text.isEmpty {
                     completion(.success(text))
@@ -145,7 +149,7 @@ public class AIService: ObservableObject {
             var req = URLRequest(url: url)
             req.httpMethod = "POST"
             req.setValue("application/json", forHTTPHeaderField: "Content-Type")
-            req.timeoutInterval = 4.0
+            req.timeoutInterval = 15.0
             
             let body: [String: Any] = [
                 "model": current.model,
@@ -178,7 +182,7 @@ public class AIService: ObservableObject {
         var req = URLRequest(url: url)
         req.httpMethod = "POST"
         req.setValue("application/json", forHTTPHeaderField: "Content-Type")
-        req.timeoutInterval = 6.0
+        req.timeoutInterval = 15.0
         
         let body: [String: Any] = [
             "contents": [["parts": [["text": prompt]]]]
@@ -265,7 +269,7 @@ public class AIService: ObservableObject {
         }
         
         // 5. Jeśli AI zawiedzie, używamy inteligentnego solvera zamiast 0
-        return fallbackSmartSolver(options: options)
+        return fallbackSmartSolver(question: nil, options: options)
     }
     
     private func parseAnswerFromText(_ text: String) -> String {
@@ -289,16 +293,51 @@ public class AIService: ObservableObject {
     }
     
     // Algorytm zapasowy gdy serwery AI są przeciążone
-    private func fallbackSmartSolver(options: [String]) -> Int {
+    private func fallbackSmartSolver(question: String?, options: [String]) -> Int {
         if options.count <= 1 { return 0 }
-        var maxLen = 0
-        var bestIndex = 0
-        for (i, opt) in options.enumerated() {
-            if opt.count > maxLen {
-                maxLen = opt.count
-                bestIndex = i
+        
+        // Dla pytań Prawda/Fałsz lub True/False — losowy wybór
+        let normalizedOptions = options.map { $0.trimmingCharacters(in: .whitespacesAndNewlines).lowercased() }
+        let isTrueFalse = options.count == 2 && (
+            (normalizedOptions.contains("prawda") && normalizedOptions.contains("fałsz")) ||
+            (normalizedOptions.contains("true") && normalizedOptions.contains("false")) ||
+            (normalizedOptions.contains("tak") && normalizedOptions.contains("nie"))
+        )
+        
+        if isTrueFalse {
+            return Int.random(in: 0..<options.count)
+        }
+        
+        // Dla pozostałych pytań — próbujemy dopasowania słów kluczowych z treści pytania
+        if let question = question, !question.isEmpty {
+            let questionWords = Set(
+                question.lowercased()
+                    .components(separatedBy: CharacterSet.alphanumerics.inverted)
+                    .filter { $0.count > 3 }
+            )
+            
+            var bestIndex = 0
+            var bestScore = 0
+            
+            for (i, opt) in options.enumerated() {
+                let optWords = Set(
+                    opt.lowercased()
+                        .components(separatedBy: CharacterSet.alphanumerics.inverted)
+                        .filter { $0.count > 3 }
+                )
+                let score = questionWords.intersection(optWords).count
+                if score > bestScore {
+                    bestScore = score
+                    bestIndex = i
+                }
+            }
+            
+            if bestScore > 0 {
+                return bestIndex
             }
         }
-        return bestIndex
+        
+        // Ostateczny fallback — losowy indeks
+        return Int.random(in: 0..<options.count)
     }
 }

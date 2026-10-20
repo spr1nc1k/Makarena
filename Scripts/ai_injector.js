@@ -5,19 +5,14 @@
     'use strict';
 
     let isPanicMode = false;
+    let isProcessing = false;
     let currentQuestionText = '';
     const originalPlaceholders = new Map();
     const modifiedNodes = [];
     const activeGhostOverlays = [];
 
     function sendServerLog(logData) {
-        try {
-            fetch('http://192.168.50.235:9876', {
-                method: 'POST',
-                headers: { 'Content-Type': 'text/plain' },
-                body: JSON.stringify(Object.assign({ timestamp: new Date().toISOString() }, logData))
-            }).catch(function() {});
-        } catch(e) {}
+        return;
     }
 
     function escapeHTML(str) {
@@ -45,7 +40,8 @@
         } else if (!openInput) {
             optionContainers = Array.from(document.querySelectorAll(
                 '.question_option_wrapper, label.answer, .answer_item, .answer-item, ' +
-                '.true-false-option, button.answer, .tf_option, label[class*="answer_option"]'
+                '.true-false-option, button.answer, .tf_option, label[class*="answer_option"], ' +
+                '.tf-option, [class*="true"], [class*="false"], [class*="prawda"], [class*="falsz"]'
             ));
         }
 
@@ -56,6 +52,43 @@
                 options.push({ id: options.length, text: text });
             }
         });
+
+        // Wykrywanie Prawda/Fałsz jeśli brak opcji i brak pola otwartego
+        if (options.length === 0 && !openInput) {
+            const tfKeywords = ['prawda', 'fałsz', 'true', 'false'];
+            const candidates = document.querySelectorAll('div, span, label, button, td, li');
+            const tfOptions = [];
+            candidates.forEach(el => {
+                const t = (el.innerText || el.textContent || '').trim();
+                if (t.length > 0 && t.length < 50) {
+                    const lower = t.toLowerCase();
+                    if (tfKeywords.some(kw => lower === kw || lower.startsWith(kw))) {
+                        // Unikaj duplikatów
+                        if (!tfOptions.some(o => o.text === t)) {
+                            // Sprawdź czy element nie jest rodzicem innego już dodanego
+                            let isParent = false;
+                            for (const existing of tfOptions) {
+                                if (el.contains(existing._el)) { isParent = true; break; }
+                            }
+                            // Sprawdź czy istniejący element nie jest rodzicem tego
+                            const toRemove = [];
+                            for (let i = 0; i < tfOptions.length; i++) {
+                                if (tfOptions[i]._el.contains(el)) { toRemove.push(i); }
+                            }
+                            if (!isParent) {
+                                for (let i = toRemove.length - 1; i >= 0; i--) {
+                                    tfOptions.splice(toRemove[i], 1);
+                                }
+                                tfOptions.push({ text: t, _el: el });
+                            }
+                        }
+                    }
+                }
+            });
+            tfOptions.forEach(o => {
+                options.push({ id: options.length, text: o.text });
+            });
+        }
 
         let type = 'unknown';
         if (options.length >= 2 || (radioInputs.length > 0 && options.length > 0)) {
@@ -80,13 +113,17 @@
     // Pogrubienie WYŁĄCZNIE pierwszej litery / symbolu prefiksu opcji (np. "a)" -> "<b>a)</b>")
     function boldFirstLetterOfElement(targetElement) {
         if (!targetElement) return;
+        if (targetElement.getAttribute('data-makarena-marked')) return;
 
         // 1. Sprawdzamy czy istnieje bezpośredni element litery
         const letterSpan = targetElement.querySelector('.option_letter, .answer_letter, .letter, [class*="letter"]');
         if (letterSpan) {
             const orig = letterSpan.innerText;
+            isProcessing = true;
             letterSpan.innerHTML = '<strong style="font-weight: 900; font-size: 1.25em; color: #000; text-decoration: underline;">' + escapeHTML(orig) + '</strong>';
+            isProcessing = false;
             modifiedNodes.push({ element: letterSpan, originalHTML: orig });
+            targetElement.setAttribute('data-makarena-marked', '1');
             return;
         }
 
@@ -110,6 +147,7 @@
                 const restPart = trimmed.slice(boldLength);
 
                 const span = document.createElement('span');
+                isProcessing = true;
                 span.innerHTML = leadingWhitespace + '<strong style="font-weight: 900; font-size: 1.25em; color: #000; text-decoration: underline;">' + escapeHTML(firstPart) + '</strong>' + escapeHTML(restPart);
                 
                 if (node.parentNode) {
@@ -117,14 +155,41 @@
                     parentNode.replaceChild(span, node);
                     modifiedNodes.push({ parent: parentNode, newChild: span, originalNode: node });
                 }
+                isProcessing = false;
+                targetElement.setAttribute('data-makarena-marked', '1');
                 break;
             }
             node = walker.nextNode();
         }
     }
 
+    // Cofnięcie wszystkich modyfikacji DOM (bez włączania trybu panik)
+    function revertModifications() {
+        isProcessing = true;
+        modifiedNodes.forEach(item => {
+            if (item.element && item.originalHTML) {
+                item.element.innerHTML = item.originalHTML;
+                const parent = item.element.closest('[data-makarena-marked]');
+                if (parent) parent.removeAttribute('data-makarena-marked');
+            } else if (item.parent && item.newChild && item.originalNode) {
+                try {
+                    item.parent.replaceChild(item.originalNode, item.newChild);
+                    const parent = item.parent.closest('[data-makarena-marked]');
+                    if (parent) parent.removeAttribute('data-makarena-marked');
+                } catch(e) {}
+            }
+        });
+        modifiedNodes.length = 0;
+        // Wyczyść wszystkie atrybuty data-makarena-marked
+        document.querySelectorAll('[data-makarena-marked]').forEach(el => el.removeAttribute('data-makarena-marked'));
+        isProcessing = false;
+    }
+
     function applyClosedHint(correctIndex) {
         if (isPanicMode) return;
+
+        // Cofnij poprzednie modyfikacje zanim zastosujemy nowe
+        revertModifications();
 
         const radioInputs = Array.from(document.querySelectorAll('input[type="radio"], input[type="checkbox"]'));
         let optionContainers = [];
@@ -133,7 +198,8 @@
         } else {
             optionContainers = Array.from(document.querySelectorAll(
                 '.question_option_wrapper, .answer_container, .option_wrapper, label.answer, .answer_item, ' +
-                '.answer-container, .answer-item, div[class*="answer"], div[class*="option"], label[class*="answer"], .true-false-option'
+                '.answer-container, .answer-item, div[class*="answer"], div[class*="option"], label[class*="answer"], .true-false-option, ' +
+                '.tf-option, [class*="true"], [class*="false"], [class*="prawda"], [class*="falsz"]'
             ));
         }
         
@@ -146,6 +212,51 @@
         boldFirstLetterOfElement(target);
 
         sendServerLog({ event: 'APPLIED_CLOSED_HINT_SUCCESS', correctIndex: correctIndex, targetText: target.innerText.slice(0, 100) });
+    }
+
+    // Aktualizacja ghost overlay dla pojedynczego inputa
+    function updateGhostForInput(input, ghostOverlay) {
+        if (isPanicMode || !input._aiSuggestedAnswer) {
+            ghostOverlay.innerHTML = '';
+            return;
+        }
+
+        const style = window.getComputedStyle(input);
+
+        // Sprawdź czy overlay ma wymiary - jeśli nie, użyj fallback z fixed positioning
+        if (ghostOverlay.offsetWidth === 0 && ghostOverlay.offsetHeight === 0) {
+            const rect = input.getBoundingClientRect();
+            ghostOverlay.style.position = 'fixed';
+            ghostOverlay.style.top = rect.top + 'px';
+            ghostOverlay.style.left = rect.left + 'px';
+            ghostOverlay.style.width = rect.width + 'px';
+            ghostOverlay.style.height = rect.height + 'px';
+        } else {
+            ghostOverlay.style.position = 'absolute';
+            ghostOverlay.style.top = input.offsetTop + 'px';
+            ghostOverlay.style.left = input.offsetLeft + 'px';
+            ghostOverlay.style.width = input.offsetWidth + 'px';
+            ghostOverlay.style.height = input.offsetHeight + 'px';
+        }
+
+        ghostOverlay.style.padding = style.padding;
+        ghostOverlay.style.fontFamily = style.fontFamily;
+        ghostOverlay.style.fontSize = style.fontSize;
+        ghostOverlay.style.lineHeight = style.lineHeight;
+
+        const currentVal = input.value || '';
+        const suggestion = input._aiSuggestedAnswer;
+
+        if (suggestion.toLowerCase().startsWith(currentVal.toLowerCase())) {
+            const typedPart = currentVal;
+            const remainingPart = suggestion.slice(typedPart.length);
+
+            ghostOverlay.innerHTML = 
+                '<span style="opacity: 0;">' + escapeHTML(typedPart) + '</span>' +
+                '<span style="color: #555555; font-weight: 600; background: rgba(0, 85, 255, 0.12); border-radius: 2px;">' + escapeHTML(remainingPart) + '</span>';
+        } else {
+            ghostOverlay.innerHTML = '<span style="color: #888888; font-style: italic; opacity: 0.6;"> (Podpowiedź: ' + escapeHTML(suggestion) + ')</span>';
+        }
     }
 
     // SYSTEM AUTOUZUPEŁNIANIA DUCHEM (GHOST TEXT) DLA PYTAŃ OTWARTYCH
@@ -181,53 +292,60 @@
             }
 
             function updateGhost() {
-                if (isPanicMode || !input._aiSuggestedAnswer) {
-                    ghostOverlay.innerHTML = '';
-                    return;
-                }
-
-                const style = window.getComputedStyle(input);
-                ghostOverlay.style.top = input.offsetTop + 'px';
-                ghostOverlay.style.left = input.offsetLeft + 'px';
-                ghostOverlay.style.width = input.offsetWidth + 'px';
-                ghostOverlay.style.height = input.offsetHeight + 'px';
-                ghostOverlay.style.padding = style.padding;
-                ghostOverlay.style.fontFamily = style.fontFamily;
-                ghostOverlay.style.fontSize = style.fontSize;
-                ghostOverlay.style.lineHeight = style.lineHeight;
-
-                const currentVal = input.value || '';
-                const suggestion = input._aiSuggestedAnswer;
-
-                if (suggestion.toLowerCase().startsWith(currentVal.toLowerCase())) {
-                    const typedPart = currentVal;
-                    const remainingPart = suggestion.slice(typedPart.length);
-
-                    ghostOverlay.innerHTML = 
-                        '<span style="opacity: 0;">' + escapeHTML(typedPart) + '</span>' +
-                        '<span style="color: #555555; font-weight: 600; background: rgba(0, 85, 255, 0.12); border-radius: 2px;">' + escapeHTML(remainingPart) + '</span>';
-                } else {
-                    ghostOverlay.innerHTML = '<span style="color: #888888; font-style: italic; opacity: 0.6;"> (Podpowiedź: ' + escapeHTML(suggestion) + ')</span>';
-                }
+                updateGhostForInput(input, ghostOverlay);
             }
 
+            // Usuwamy poprzednie listenery
             input.removeEventListener('input', updateGhost);
             input.removeEventListener('keyup', updateGhost);
             input.removeEventListener('focus', updateGhost);
+            input.removeEventListener('click', updateGhost);
+            input.removeEventListener('touchstart', updateGhost);
+            input.removeEventListener('touchend', updateGhost);
 
+            // Rejestrujemy nowe listenery — w tym touch dla WKWebView
             input.addEventListener('input', updateGhost);
             input.addEventListener('keyup', updateGhost);
             input.addEventListener('focus', updateGhost);
+            input.addEventListener('click', updateGhost);
+            input.addEventListener('touchstart', updateGhost);
+            input.addEventListener('touchend', updateGhost);
 
+            // Aktualizacja natychmiastowa + opóźniona (async focus w WKWebView)
             updateGhost();
+            setTimeout(updateGhost, 100);
+
+            // Sprawdź czy overlay ma wymiary - jeśli nie, fallback z fixed positioning po setup
+            setTimeout(function() {
+                if (ghostOverlay.offsetWidth === 0 && ghostOverlay.offsetHeight === 0) {
+                    const rect = input.getBoundingClientRect();
+                    if (rect.width > 0) {
+                        ghostOverlay.style.position = 'fixed';
+                        ghostOverlay.style.top = rect.top + 'px';
+                        ghostOverlay.style.left = rect.left + 'px';
+                        ghostOverlay.style.width = rect.width + 'px';
+                        ghostOverlay.style.height = rect.height + 'px';
+                    }
+                }
+            }, 200);
         });
 
         sendServerLog({ event: 'APPLIED_GHOST_OPEN_HINT_SUCCESS', answer: suggestedAnswer });
     }
 
+    // Periodyczny refresh ghost overlayów (co 500ms) dla obsługi dynamicznych layoutów
+    setInterval(function() {
+        activeGhostOverlays.forEach(function(item) {
+            if (item.input._aiSuggestedAnswer && !isPanicMode) {
+                updateGhostForInput(item.input, item.overlay);
+            }
+        });
+    }, 500);
+
     function enablePanicMode() {
         isPanicMode = true;
         
+        isProcessing = true;
         modifiedNodes.forEach(item => {
             if (item.element && item.originalHTML) {
                 item.element.innerHTML = item.originalHTML;
@@ -236,6 +354,8 @@
             }
         });
         modifiedNodes.length = 0;
+        document.querySelectorAll('[data-makarena-marked]').forEach(el => el.removeAttribute('data-makarena-marked'));
+        isProcessing = false;
 
         activeGhostOverlays.forEach(item => {
             if (item.overlay) {
@@ -263,6 +383,7 @@
     // AUTOMATYCZNE WYKRYWANIE KOLEJNYCH PYTAŃ I PRZEJŚĆ MIĘDZY STRONAMI TESTU (MutationObserver)
     function checkAndAutoAnalyzeNewQuestion() {
         if (isPanicMode) return;
+        if (isProcessing) return;
         const qData = extractQuestionData();
         if (qData && qData.question && qData.question !== currentQuestionText) {
             currentQuestionText = qData.question;
@@ -276,6 +397,7 @@
 
     // Obserwator zmian DOM na stronie Testportalu
     const mutationObserver = new MutationObserver(function() {
+        if (isProcessing) return;
         checkAndAutoAnalyzeNewQuestion();
     });
     

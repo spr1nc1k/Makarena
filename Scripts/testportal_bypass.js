@@ -134,18 +134,5 @@
         }, 'suppressor'), true);
     });
 
-    // 6. Wysyłanie zdalnego logu diagnostycznego na serwer 192.168.50.235:9876
-    try {
-        fetch('http://192.168.50.235:9876', {
-            method: 'POST',
-            headers: { 'Content-Type': 'text/plain' },
-            body: JSON.stringify({
-                timestamp: new Date().toISOString(),
-                url: window.location.href,
-                status: 'NATIVE_SPOOF_ACTIVE'
-            })
-        }).catch(function() {});
-    } catch(e) {}
-
     console.log('[Makarena Engine] Native spoof stealth engine active.');
 })();
