@@ -33,7 +33,6 @@ struct TabManagerView: View {
             }
             .navigationTitle("Karty (\(tabs.count))")
             .navigationBarTitleDisplayMode(.inline)
-            .toolbarColorScheme(.dark, for: .navigationBar)
             .toolbar {
                 ToolbarItem(placement: .navigationBarLeading) {
                     Button {

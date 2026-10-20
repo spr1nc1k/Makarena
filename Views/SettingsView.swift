@@ -199,7 +199,6 @@ struct SettingsView: View {
             }
             .navigationTitle("Ustawienia Makarena")
             .navigationBarTitleDisplayMode(.inline)
-            .toolbarColorScheme(.dark, for: .navigationBar)
             .toolbar {
                 ToolbarItem(placement: .confirmationAction) {
                     Button("Gotowe") {

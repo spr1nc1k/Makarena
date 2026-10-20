@@ -426,7 +426,6 @@ struct FeatureMenuView: View {
             }
             .navigationTitle("Funkcje")
             .navigationBarTitleDisplayMode(.inline)
-            .toolbarColorScheme(.dark, for: .navigationBar)
             .toolbar {
                 ToolbarItem(placement: .confirmationAction) {
                     Button("Zamknij") {
