@@ -37,17 +37,21 @@ struct SettingsView: View {
                                         .foregroundColor(.mkTextPrimary)
                                 }
                                 
-                                Text("Aplikacja automatycznie przechodzi po puli bezpłatnych serwerów (Pollinations, LLM7, OVH, Gemini). Użytkownik nie musi niczego wybierać ani konfigurować.")
+                                Text("Aplikacja automatycznie przechodzi po puli bezpłatnych serwerów. Użytkownik nie musi niczego konfigurować.")
                                     .font(.system(size: 12))
                                     .foregroundColor(.mkTextSecondary)
                                 
                                 Divider().background(Color.white.opacity(0.08))
                                 
-                                VStack(alignment: .leading, spacing: 4) {
-                                    Text("Opcjonalny własny Klucz Gemini API (darmowy z Google AI Studio):")
+                                VStack(alignment: .leading, spacing: 6) {
+                                    Text("Własny darmowy Klucz Gemini API (Zalecany):")
+                                        .font(.system(size: 12, weight: .medium))
+                                        .foregroundColor(.mkTextPrimary)
+                                    Text("Daje 0ms opóźnienia, brak limitów 30s oraz pełną analizę ilustracji i zadań ze zdjęciami.")
                                         .font(.system(size: 11))
                                         .foregroundColor(.mkTextSecondary)
-                                    SecureField("Wklej opcjonalny klucz API (AIzaSy...)", text: $apiKey)
+                                    
+                                    SecureField("Wklej klucz API (AIzaSy...)", text: $apiKey)
                                         .font(.system(size: 13, design: .monospaced))
                                         .autocapitalization(.none)
                                         .disableAutocorrection(true)
@@ -58,6 +62,16 @@ struct SettingsView: View {
                                             RoundedRectangle(cornerRadius: 8)
                                                 .stroke(Color.white.opacity(0.1), lineWidth: 0.5)
                                         )
+                                    
+                                    Link(destination: URL(string: "https://aistudio.google.com/app/apikey")!) {
+                                        HStack(spacing: 5) {
+                                            Image(systemName: "arrow.up.right.square")
+                                            Text("Otwórz Google AI Studio i pobierz darmowy klucz")
+                                        }
+                                        .font(.system(size: 11, weight: .semibold))
+                                        .foregroundColor(.mkAccent)
+                                    }
+                                    .padding(.top, 2)
                                 }
                             }
                         }

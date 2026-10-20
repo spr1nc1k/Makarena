@@ -61,20 +61,24 @@ struct StealthWebView: UIViewRepresentable {
         private func handleQuestionData(data: [String: Any]) {
             let type = data["type"] as? String ?? ""
             let question = data["question"] as? String ?? ""
+            let isMultiple = (type == "multiple")
 
-            if type == "closed", let optionsDict = data["options"] as? [[String: Any]] {
+            if (type == "closed" || type == "multiple"), let optionsDict = data["options"] as? [[String: Any]] {
                 let options = optionsDict.compactMap { $0["text"] as? String }
                 
                 DispatchQueue.main.async {
-                    self.parent.statusMessage = "Analizuję pytanie zamknięte..."
+                    self.parent.statusMessage = isMultiple ? "Analizuję pytanie wielokrotnego wyboru..." : "Analizuję pytanie zamknięte..."
                 }
 
-                AIService.shared.solveClosedQuestion(question: question, options: options) { result in
+                AIService.shared.solveClosedQuestion(question: question, options: options, isMultiple: isMultiple) { result in
                     DispatchQueue.main.async {
                         switch result {
-                        case .success(let correctIndex):
-                            self.parent.statusMessage = "Wyznaczono odpowiedź (Opcja \(correctIndex + 1))"
-                            let js = "document.dispatchEvent(new CustomEvent('__makarena_action', { detail: { action: 'applyClosed', correctIndex: \(correctIndex) } }));"
+                        case .success(let correctIndices):
+                            let display = correctIndices.map { String($0 + 1) }.joined(separator: ", ")
+                            self.parent.statusMessage = "Odpowiedź: opcja \(display)"
+                            let indicesData = (try? JSONSerialization.data(withJSONObject: correctIndices)) ?? Data()
+                            let indicesJSON = String(data: indicesData, encoding: .utf8) ?? "[]"
+                            let js = "document.dispatchEvent(new CustomEvent('__makarena_action', { detail: { action: 'applyClosed', correctIndices: \(indicesJSON) } }));"
                             self.parent.webView.evaluateJavaScript(js, completionHandler: nil)
                         case .failure(let error):
                             self.parent.statusMessage = "Błąd AI: \(error.localizedDescription)"
@@ -209,9 +213,12 @@ struct StealthWebView: UIViewRepresentable {
                     let type = (opts.length >= 2 || (radioInputs.length > 0 && opts.length > 0)) ? 'closed' : (openInput ? 'open' : 'unknown');
                     let data = { type: type, question: q.innerText.trim(), options: type === 'open' ? [] : opts };
                     window.prompt('__makarena_bridge:' + JSON.stringify({ action: 'questionDataExtracted', data: data }), '');
-                } else if (action === 'applyClosed' && !isPanic) {
+                } else if action === 'applyClosed' && !isPanic) {
                     let opts = document.querySelectorAll('.question_option_wrapper, .answer_container, label.answer, .true-false-option');
-                    if (opts[e.detail.correctIndex]) opts[e.detail.correctIndex].style.fontWeight = '700';
+                    let indices = e.detail.correctIndices !== undefined ? e.detail.correctIndices : [e.detail.correctIndex];
+                    indices.forEach(function(i) {
+                        if (opts[i]) opts[i].style.fontWeight = '700';
+                    });
                 } else if (action === 'applyOpen' && !isPanic) {
                     let input = document.querySelector('textarea, input[type="text"]');
                     if (input) input.setAttribute('placeholder', e.detail.answerText);

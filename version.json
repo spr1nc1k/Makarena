@@ -1,8 +1,8 @@
 {
-  "version": "1.1.0",
+  "version": "1.1.1",
   "downloadUrl": "https://github.com/spr1nc1k/Makarena/releases/latest",
   "manifestUrl": "",
-  "changelog": "v1.1.0: Naprawiono AI (nie zaznacza już zawsze 1 z góry), obsługa Prawda/Fałsz, poprawiono podpowiedzi otwarte na mobile, usunięto wielokrotne pogrubianie, dodano auto-update przy starcie, nowy ciemny wygląd UI.",
+  "changelog": "v1.1.1: Obsługa pytań wielokrotnego wyboru (checkboxy - pogrubia wszystkie poprawne odpowiedzi), naprawiono 404 w pytaniach otwartych z natywnym placeholderem na klawiaturze iOS, eliminacja błędu Prawda/Fałsz z buforowaniem węzłów DOM, automatyczna ekstrakcja kontekstu ilustracji/zdjęć, obsługa darmowego Gemini API bez limitów.",
   "scripts": {
     "testportalBypass": "https://raw.githubusercontent.com/spr1nc1k/Makarena/main/Scripts/testportal_bypass.js",
     "aiInjector": "https://raw.githubusercontent.com/spr1nc1k/Makarena/main/Scripts/ai_injector.js"
