@@ -1,6 +1,6 @@
 // ai_injector.js
-// Niewykrywalny silnik analizy DOM i podpowiedzi AI dla platformy testowej (Makarena)
-// Obsługuje pytania jednokrotnego i wielokrotnego wyboru (checkboxy), Prawda/Fałsz, kontekst ilustracji oraz pytania otwarte
+// Niewykrywalny silnik analizy DOM i podpowiedzi AI dla platformy Testportal
+// Pełna obsługa pytań jednokrotnego i wielokrotnego wyboru (MDC), Prawda/Fałsz, pytań otwartych oraz ekstrakcji obrazów
 
 (function() {
     'use strict';
@@ -13,117 +13,111 @@
     const modifiedNodes = [];
     const activeGhostOverlays = [];
 
-    function sendServerLog(logData) {
-        return;
-    }
-
     function escapeHTML(str) {
         if (!str) return '';
         return str.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
     }
 
-    // Wyciąganie kontekstu ilustracji (alt, title, nazwa pliku z url)
-    function extractImageContext() {
-        const questionArea = document.querySelector(
-            '.question_text_content, .question_content, .question_wrapper, .question-container, ' +
-            '.test-question-content, [class*="question_text"], [class*="question-text"], .question'
-        ) || document.body;
+    // Ekstrakcja obrazu z pytania (zarówno URL jak i base64 z canvas)
+    function extractQuestionImageData() {
+        // Na Testportalu grafika pytania znajduje się w .question_essence img lub #questionForm img
+        const img = document.querySelector(
+            '.question_essence img, .question_content img, [class*="question"] img, #questionForm img, .question_image img'
+        );
 
-        const imgs = Array.from(questionArea.querySelectorAll('img')).filter(img => {
-            const src = img.src || '';
-            const rect = img.getBoundingClientRect();
-            // Pomijamy małe ikony, logo, avatary
-            if (src.includes('logo') || src.includes('avatar') || src.includes('icon_')) return false;
-            return rect.width > 25 || img.width > 25 || img.alt || src.includes('question') || src.includes('image');
-        });
+        if (!img) return { url: null, base64: null };
 
-        if (imgs.length === 0) return '';
+        const src = img.src || '';
+        if (src.includes('logo') || src.includes('avatar') || src.includes('icon_')) {
+            return { url: null, base64: null };
+        }
 
-        const descs = [];
-        imgs.forEach((img, idx) => {
-            const parts = [];
-            if (img.alt && img.alt.trim()) parts.push('alt: "' + img.alt.trim() + '"');
-            if (img.title && img.title.trim()) parts.push('tytuł: "' + img.title.trim() + '"');
-            try {
-                const u = new URL(img.src);
-                const file = u.pathname.split('/').pop();
-                if (file && file.length > 3 && !file.includes('spacer') && !file.includes('blank')) {
-                    parts.push('plik: "' + decodeURIComponent(file) + '"');
-                }
-            } catch(e) {}
-            if (parts.length > 0) {
-                descs.push('[Ilustracja ' + (idx + 1) + ': ' + parts.join(', ') + ']');
-            } else {
-                descs.push('[Ilustracja ' + (idx + 1) + ' obecna]');
+        let base64 = null;
+        try {
+            const canvas = document.createElement('canvas');
+            canvas.width = img.naturalWidth || img.width || 300;
+            canvas.height = img.naturalHeight || img.height || 200;
+            const ctx = canvas.getContext('2d');
+            ctx.drawImage(img, 0, 0);
+            const dataUrl = canvas.toDataURL('image/jpeg', 0.85);
+            if (dataUrl && dataUrl.startsWith('data:image')) {
+                base64 = dataUrl.split(',')[1];
             }
-        });
+        } catch(e) {
+            // W razie ograniczeń CORS w canvasie zwracamy sam URL - Swift pobierze bajty natywnie
+        }
 
-        return descs.join(' ');
+        return { url: src, base64: base64 };
     }
 
-    // Ekstrakcja danych pytania i opcji odpowiedzi
+    // Główna ekstrakcja danych pytania i wariantów odpowiedzi
     function extractQuestionData() {
         if (isPanicMode) return null;
 
+        // 1. Treść pytania
         const questionTextEl = document.querySelector(
-            '.question_text_content, .question_content, .question-text, .question_text, .question_wrapper, ' +
-            '.question-container, .test-question-content, [class*="question_text"], [class*="question-text"], ' +
-            'h1, h2, h3, .question'
+            '.question_essence, .question_text_content, .question_content, .question-text, .question_text, ' +
+            '.test-question-content, [class*="question_text"], [class*="question-text"], .question, h1, h2, h3'
         ) || document.body;
 
-        let questionText = questionTextEl ? questionTextEl.innerText.trim().slice(0, 1000) : '';
+        const questionText = questionTextEl ? questionTextEl.innerText.trim().slice(0, 1000) : '';
 
-        // Dołączamy kontekst ilustracji, jeśli występuje
-        const imgContext = extractImageContext();
-        if (imgContext) {
-            questionText += '\n' + imgContext;
+        // 2. Grafika pytania
+        const imgData = extractQuestionImageData();
+
+        // 3. Rozpoznanie typu formularza na Testportalu
+        // Kontenery odpowiedzi na Testportalu to zawsze .answer_container
+        let containers = Array.from(document.querySelectorAll(
+            '.answer_container, .question_answers .answer, #questionForm .question_option_wrapper, .true-false-option, .tf_option'
+        ));
+
+        // Sprawdzamy obecność checkboxów (wielokrotny wybór) i radio (jednokrotny / Prawda-Fałsz)
+        const checkboxes = Array.from(document.querySelectorAll(
+            '#questionForm input[type="checkbox"], .question_answers .mdc-checkbox, input[type="checkbox"]'
+        ));
+        const radioInputs = Array.from(document.querySelectorAll(
+            '#questionForm input[type="radio"], .question_answers .mdc-radio, input[type="radio"]'
+        ));
+
+        // Jeśli kontenery .answer_container nie zostały znalezione bezpośrednio, szukamy po inputach
+        if (containers.length === 0) {
+            if (checkboxes.length > 0) {
+                containers = checkboxes.map(i => i.closest('.answer_container, label, .question_option_wrapper, tr, li') || i.parentElement || i);
+            } else if (radioInputs.length > 0) {
+                containers = radioInputs.map(i => i.closest('.answer_container, label, .question_option_wrapper, tr, li') || i.parentElement || i);
+            }
         }
 
-        const checkboxes = Array.from(document.querySelectorAll('input[type="checkbox"]'));
-        const radioInputs = Array.from(document.querySelectorAll('input[type="radio"]'));
-        const openInput = document.querySelector('textarea, input[type="text"]:not([name*="search"]):not([id*="search"]), div[contenteditable="true"]');
-        
-        let optionContainers = [];
-        const isMultipleChoice = checkboxes.length > 0;
-
-        if (checkboxes.length > 0) {
-            // Pytanie wielokrotnego wyboru (kwadraty / checkboxy)
-            optionContainers = checkboxes.map(input => input.closest('label, .answer_container, .question_option_wrapper, .answer_item, tr, li') || input.parentElement || input);
-        } else if (radioInputs.length > 0) {
-            // Pytanie jednokrotnego wyboru (kółka / radio)
-            optionContainers = radioInputs.map(input => input.closest('label, .answer_container, .question_option_wrapper, .answer_item, tr, li') || input.parentElement || input);
-        } else if (!openInput) {
-            // Opcje oparte na klasach CSS / Prawda-Fałsz bez bezpośrednich inputów
-            optionContainers = Array.from(document.querySelectorAll(
-                '.question_option_wrapper, label.answer, .answer_item, .answer-item, ' +
-                '.true-false-option, button.answer, .tf_option, label[class*="answer_option"], ' +
-                '.tf-option, [class*="true"], [class*="false"], [class*="prawda"], [class*="falsz"]'
-            ));
-        }
+        // Pytanie otwarte
+        const openInput = document.querySelector(
+            '.mdc-text-field__input, .all_short_answers input, textarea, input[type="text"]:not([name*="search"]), #givenAnswer_ifr, div[contenteditable="true"]'
+        );
 
         let options = [];
         const resolvedContainers = [];
 
-        optionContainers.forEach((el) => {
-            const text = el.innerText ? el.innerText.trim() : el.textContent ? el.textContent.trim() : '';
+        containers.forEach((el) => {
+            // Szukamy tekstu odpowiedzi - na Testportalu w .answer_text lub bezpośrednio w kontenerze
+            const textEl = el.querySelector('.answer_text, .mdc-form-field label, .option_text, span') || el;
+            let text = textEl.innerText ? textEl.innerText.trim() : el.innerText ? el.innerText.trim() : '';
+            
             if (text && text.length < 300 && !options.some(o => o.text === text)) {
                 options.push({ id: options.length, text: text });
                 resolvedContainers.push(el);
             }
         });
 
-        // Specjalna detekcja Prawda / Fałsz gdy standardowe selektory nie zwróciły opcji
+        // Specjalna detekcja dla pytań Prawda / Fałsz gdy Testportal używa niestandardowych kafelków
         if (options.length === 0 && !openInput) {
             const tfKeywords = ['prawda', 'fałsz', 'true', 'false'];
-            const candidates = Array.from(document.querySelectorAll('div, span, label, button, td, li, a'));
+            const allElements = Array.from(document.querySelectorAll('label, div, button, span, td'));
             const tfFound = [];
 
-            candidates.forEach(el => {
-                const t = (el.innerText || el.textContent || '').trim();
-                if (t.length > 0 && t.length < 40) {
+            allElements.forEach(el => {
+                const t = (el.innerText || '').trim();
+                if (t.length > 0 && t.length < 30) {
                     const lower = t.toLowerCase();
-                    if (tfKeywords.some(kw => lower === kw || lower.startsWith(kw))) {
-                        // Nie dodawaj duplikatów i nie bierz rodziców już dodanych elementów
+                    if (tfKeywords.some(kw => lower === kw)) {
                         if (!tfFound.some(o => o.text === t || o.el.contains(el))) {
                             tfFound.push({ text: t, el: el });
                         }
@@ -139,11 +133,12 @@
             }
         }
 
-        // Zapisujemy referencje do elementów w pamięci podręcznej dla 100% zgodności przy nakładaniu podpowiedzi
         cachedOptionElements = resolvedContainers;
 
         let type = 'unknown';
-        if (isMultipleChoice && options.length > 0) {
+        const isMultiple = (checkboxes.length > 0 && options.length > 0) || document.querySelector('.mdc-checkbox') !== null;
+
+        if (isMultiple) {
             type = 'multiple';
         } else if (options.length >= 2 || (radioInputs.length > 0 && options.length > 0)) {
             type = 'closed';
@@ -157,32 +152,36 @@
         const extracted = {
             type: type,
             question: questionText,
-            options: options
+            options: options,
+            imageUrl: imgData.url,
+            imageBase64: imgData.base64
         };
 
-        sendServerLog({ event: 'QUESTION_EXTRACTED', data: extracted });
         return extracted;
     }
 
-    // Pogrubienie pierwszej litery / symbolu elementu
+    // Pogrubianie pierwszej litery właściwego elementu odpowiedzi
     function boldFirstLetterOfElement(targetElement) {
         if (!targetElement) return;
         if (targetElement.getAttribute('data-makarena-marked')) return;
 
-        // 1. Sprawdzamy czy istnieje bezpośredni span z literą (a., b., 1., itp.)
-        const letterSpan = targetElement.querySelector('.option_letter, .answer_letter, .letter, [class*="letter"]');
+        // Szukamy bezpośredniego elementu tekstowego w .answer_text (specyfika Testportalu)
+        const textContainer = targetElement.querySelector('.answer_text, .mdc-form-field label, .option_text') || targetElement;
+
+        // 1. Sprawdzamy czy istnieje bezpośredni span z literą opcji (A., B., 1., itp.)
+        const letterSpan = textContainer.querySelector('.option_letter, .answer_letter, .letter, [class*="letter"]');
         if (letterSpan) {
             const orig = letterSpan.innerText;
             isProcessing = true;
-            letterSpan.innerHTML = '<strong style="font-weight: 900; font-size: 1.22em; color: #000; text-decoration: underline;">' + escapeHTML(orig) + '</strong>';
+            letterSpan.innerHTML = '<strong style="font-weight: 900; font-size: 1.25em; color: #000; text-decoration: underline;">' + escapeHTML(orig) + '</strong>';
             isProcessing = false;
             modifiedNodes.push({ element: letterSpan, originalHTML: orig });
             targetElement.setAttribute('data-makarena-marked', '1');
             return;
         }
 
-        // 2. W przeciwnym razie odnajdujemy pierwszy niepusty węzeł tekstowy
-        const walker = document.createTreeWalker(targetElement, NodeFilter.SHOW_TEXT, null, false);
+        // 2. Przeszukujemy węzły tekstowe
+        const walker = document.createTreeWalker(textContainer, NodeFilter.SHOW_TEXT, null, false);
         let node = walker.nextNode();
         while (node) {
             const text = node.nodeValue;
@@ -190,7 +189,7 @@
                 const trimmed = text.trimStart();
                 const leadingWhitespace = text.slice(0, text.length - trimmed.length);
                 
-                // Dopasowanie pierwszej litery lub prefiksu (np. "A)", "1.", "Prawda", "Fałsz")
+                // Prefiks lub pierwsza litera
                 const match = trimmed.match(/^([A-Za-zĄĆĘŁŃÓŚŹŻąćęłńóśźż0-9][\)\.\:\-]?)/);
                 let boldLength = 1;
                 if (match && match[1]) {
@@ -202,7 +201,7 @@
 
                 const span = document.createElement('span');
                 isProcessing = true;
-                span.innerHTML = leadingWhitespace + '<strong style="font-weight: 900; font-size: 1.22em; color: #000; text-decoration: underline;">' + escapeHTML(firstPart) + '</strong>' + escapeHTML(restPart);
+                span.innerHTML = leadingWhitespace + '<strong style="font-weight: 900; font-size: 1.25em; color: #000; text-decoration: underline;">' + escapeHTML(firstPart) + '</strong>' + escapeHTML(restPart);
                 
                 if (node.parentNode) {
                     const parentNode = node.parentNode;
@@ -217,15 +216,19 @@
         }
     }
 
-    // Cofnięcie wszystkich nałożonych modyfikacji DOM
+    // Cofnięcie modyfikacji DOM
     function revertModifications() {
         isProcessing = true;
         modifiedNodes.forEach(item => {
             if (item.element && item.originalHTML) {
                 item.element.innerHTML = item.originalHTML;
+                const parent = item.element.closest('[data-makarena-marked]');
+                if (parent) parent.removeAttribute('data-makarena-marked');
             } else if (item.parent && item.newChild && item.originalNode) {
                 try {
                     item.parent.replaceChild(item.originalNode, item.newChild);
+                    const parent = item.parent.closest('[data-makarena-marked]');
+                    if (parent) parent.removeAttribute('data-makarena-marked');
                 } catch(e) {}
             }
         });
@@ -234,7 +237,7 @@
         isProcessing = false;
     }
 
-    // Aplikowanie podpowiedzi dla pytań zamkniętych / wielokrotnych (tablica lub pojedynczy indeks)
+    // Aplikowanie podpowiedzi dla pytań zamkniętych i wielokrotnego wyboru
     function applyClosedHint(indicesArg) {
         if (isPanicMode) return;
 
@@ -249,23 +252,12 @@
 
         if (indices.length === 0) return;
 
-        // Korzystamy z pamięci podręcznej elementów wyekstrahowanych podczas skanu
         let targets = cachedOptionElements;
 
-        // Jeśli pamięć podręczna jest pusta, odszukujemy elementy ponownie
         if (!targets || targets.length === 0) {
-            const checkboxes = Array.from(document.querySelectorAll('input[type="checkbox"]'));
-            const radioInputs = Array.from(document.querySelectorAll('input[type="radio"]'));
-            if (checkboxes.length > 0) {
-                targets = checkboxes.map(i => i.closest('label, .answer_container, .question_option_wrapper, .answer_item, tr, li') || i.parentElement || i);
-            } else if (radioInputs.length > 0) {
-                targets = radioInputs.map(i => i.closest('label, .answer_container, .question_option_wrapper, .answer_item, tr, li') || i.parentElement || i);
-            } else {
-                targets = Array.from(document.querySelectorAll(
-                    '.question_option_wrapper, .answer_container, .option_wrapper, label.answer, .answer_item, ' +
-                    '.true-false-option, .tf-option, [class*="true"], [class*="false"], [class*="prawda"], [class*="falsz"]'
-                ));
-            }
+            targets = Array.from(document.querySelectorAll(
+                '.answer_container, .question_answers .answer, #questionForm .question_option_wrapper, .true-false-option'
+            ));
         }
 
         indices.forEach(idx => {
@@ -275,7 +267,7 @@
         });
     }
 
-    // Aktualizacja ghost overlay dla pojedynczego inputa
+    // Aktualizacja podpowiedzi dla pytań otwartych
     function updateGhostForInput(input, ghostOverlay) {
         if (isPanicMode || !input._aiSuggestedAnswer) {
             ghostOverlay.innerHTML = '';
@@ -319,30 +311,29 @@
         }
     }
 
-    // Podpowiedzi dla pytań otwartych — podwójny mechanizm: natywny placeholder + ghost overlay
     function applyOpenHint(suggestedAnswer) {
         if (isPanicMode || !suggestedAnswer) return;
 
-        // Sanitizacja: ignorujemy odpowiedzi zawierające komunikaty błędów sieciowych lub statusy HTTP
         const clean = suggestedAnswer.trim();
         const lower = clean.toLowerCase();
         if (lower.includes('404') || lower.includes('not found') || lower.includes('free limit') || lower.includes('error') || lower.includes('too many')) {
             return;
         }
 
-        const inputs = document.querySelectorAll('textarea, input[type="text"]:not([name*="search"]), div[contenteditable="true"]');
+        // Specyficzne pola wejściowe Testportalu: .mdc-text-field__input, .all_short_answers input, textarea, #givenAnswer_ifr
+        const inputs = document.querySelectorAll(
+            '.mdc-text-field__input, .all_short_answers input, textarea, input[type="text"]:not([name*="search"]), div[contenteditable="true"]'
+        );
         if (!inputs || inputs.length === 0) return;
 
         inputs.forEach(input => {
             input._aiSuggestedAnswer = clean;
 
-            // 1. Zapisujemy i nadpisujemy natywny atrybut placeholder (działa niezawodnie na klawiaturze iOS)
             if (!originalPlaceholders.has(input)) {
                 originalPlaceholders.set(input, input.getAttribute('placeholder') || '');
             }
             input.setAttribute('placeholder', clean);
 
-            // 2. Obsługa ghost overlay
             let ghostOverlay = input._ghostOverlay;
             if (!ghostOverlay) {
                 ghostOverlay = document.createElement('div');
@@ -367,7 +358,6 @@
 
             function updateGhost() {
                 updateGhostForInput(input, ghostOverlay);
-                // Przy aktywacji pola (focus/click) upewniamy się że placeholder jest widoczny
                 if (!input.value) {
                     input.setAttribute('placeholder', clean);
                 }
@@ -392,7 +382,7 @@
         });
     }
 
-    // Panic Mode — całkowite wyczyszczenie wszelkich śladów w DOM
+    // Panic Mode — natychmiastowe usunięcie wszelkich śladów wizualnych
     function enablePanicMode() {
         isPanicMode = true;
         revertModifications();
@@ -403,7 +393,7 @@
             }
         });
 
-        const inputs = document.querySelectorAll('textarea, input[type="text"], div[contenteditable="true"]');
+        const inputs = document.querySelectorAll('.mdc-text-field__input, .all_short_answers input, textarea, input[type="text"], div[contenteditable="true"]');
         inputs.forEach(input => {
             if (originalPlaceholders.has(input)) {
                 input.setAttribute('placeholder', originalPlaceholders.get(input));
@@ -418,7 +408,6 @@
         isPanicMode = false;
     }
 
-    // Automatyczne wykrywanie kolejnych stron testu
     function checkAndAutoAnalyzeNewQuestion() {
         if (isPanicMode) return;
         if (isProcessing) return;
@@ -432,7 +421,6 @@
         }
     }
 
-    // Obserwator zmian DOM
     const mutationObserver = new MutationObserver(function() {
         if (isProcessing) return;
         checkAndAutoAnalyzeNewQuestion();
@@ -446,7 +434,6 @@
         });
     }
 
-    // Okresowe odświeżanie ghost overlay
     setInterval(function() {
         if (isPanicMode) return;
         activeGhostOverlays.forEach(item => {
@@ -456,7 +443,6 @@
         });
     }, 600);
 
-    // Nasłuch zdarzeń ze Swift
     document.addEventListener('__makarena_action', function(e) {
         if (!e || !e.detail) return;
         const action = e.detail.action;

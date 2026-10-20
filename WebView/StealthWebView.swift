@@ -62,52 +62,70 @@ struct StealthWebView: UIViewRepresentable {
             let type = data["type"] as? String ?? ""
             let question = data["question"] as? String ?? ""
             let isMultiple = (type == "multiple")
+            let imageUrl = data["imageUrl"] as? String
+            let initialBase64 = data["imageBase64"] as? String
 
-            if (type == "closed" || type == "multiple"), let optionsDict = data["options"] as? [[String: Any]] {
-                let options = optionsDict.compactMap { $0["text"] as? String }
-                
-                DispatchQueue.main.async {
-                    self.parent.statusMessage = isMultiple ? "Analizuję pytanie wielokrotnego wyboru..." : "Analizuję pytanie zamknięte..."
-                }
-
-                AIService.shared.solveClosedQuestion(question: question, options: options, isMultiple: isMultiple) { result in
+            let executeWithImage: (String?) -> Void = { finalBase64 in
+                if (type == "closed" || type == "multiple"), let optionsDict = data["options"] as? [[String: Any]] {
+                    let options = optionsDict.compactMap { $0["text"] as? String }
+                    
                     DispatchQueue.main.async {
-                        switch result {
-                        case .success(let correctIndices):
-                            let display = correctIndices.map { String($0 + 1) }.joined(separator: ", ")
-                            self.parent.statusMessage = "Odpowiedź: opcja \(display)"
-                            let indicesData = (try? JSONSerialization.data(withJSONObject: correctIndices)) ?? Data()
-                            let indicesJSON = String(data: indicesData, encoding: .utf8) ?? "[]"
-                            let js = "document.dispatchEvent(new CustomEvent('__makarena_action', { detail: { action: 'applyClosed', correctIndices: \(indicesJSON) } }));"
-                            self.parent.webView.evaluateJavaScript(js, completionHandler: nil)
-                        case .failure(let error):
-                            self.parent.statusMessage = "Błąd AI: \(error.localizedDescription)"
+                        self.parent.statusMessage = isMultiple ? "Analizuję pytanie wielokrotnego wyboru..." : "Analizuję pytanie zamknięte..."
+                    }
+
+                    AIService.shared.solveClosedQuestion(question: question, options: options, isMultiple: isMultiple, imageBase64: finalBase64) { result in
+                        DispatchQueue.main.async {
+                            switch result {
+                            case .success(let correctIndices):
+                                let display = correctIndices.map { String($0 + 1) }.joined(separator: ", ")
+                                self.parent.statusMessage = "Odpowiedź: opcja \(display)"
+                                let indicesData = (try? JSONSerialization.data(withJSONObject: correctIndices)) ?? Data()
+                                let indicesJSON = String(data: indicesData, encoding: .utf8) ?? "[]"
+                                let js = "document.dispatchEvent(new CustomEvent('__makarena_action', { detail: { action: 'applyClosed', correctIndices: \(indicesJSON) } }));"
+                                self.parent.webView.evaluateJavaScript(js, completionHandler: nil)
+                            case .failure(let error):
+                                self.parent.statusMessage = "Błąd AI: \(error.localizedDescription)"
+                            }
                         }
                     }
-                }
-            } else if type == "open" {
-                DispatchQueue.main.async {
-                    self.parent.statusMessage = "Analizuję pytanie otwarte..."
-                }
-
-                AIService.shared.solveOpenQuestion(question: question) { result in
+                } else if type == "open" {
                     DispatchQueue.main.async {
-                        switch result {
-                        case .success(let answerText):
-                            self.parent.statusMessage = "Wyznaczono odpowiedź otwartą"
-                            // Escapowanie podwójnych cudzysłowów dla JS
-                            let escaped = answerText.replacingOccurrences(of: "\"", with: "\\\"").replacingOccurrences(of: "\n", with: " ")
-                            let js = "document.dispatchEvent(new CustomEvent('__makarena_action', { detail: { action: 'applyOpen', answerText: \"\(escaped)\" } }));"
-                            self.parent.webView.evaluateJavaScript(js, completionHandler: nil)
-                        case .failure(let error):
-                            self.parent.statusMessage = "Błąd AI: \(error.localizedDescription)"
+                        self.parent.statusMessage = "Analizuję pytanie otwarte..."
+                    }
+
+                    AIService.shared.solveOpenQuestion(question: question, imageBase64: finalBase64) { result in
+                        DispatchQueue.main.async {
+                            switch result {
+                            case .success(let answerText):
+                                self.parent.statusMessage = "Wyznaczono odpowiedź otwartą"
+                                let escaped = answerText.replacingOccurrences(of: "\"", with: "\\\"").replacingOccurrences(of: "\n", with: " ")
+                                let js = "document.dispatchEvent(new CustomEvent('__makarena_action', { detail: { action: 'applyOpen', answerText: \"\(escaped)\" } }));"
+                                self.parent.webView.evaluateJavaScript(js, completionHandler: nil)
+                            case .failure(let error):
+                                self.parent.statusMessage = "Błąd AI: \(error.localizedDescription)"
+                            }
                         }
                     }
+                } else {
+                    DispatchQueue.main.async {
+                        self.parent.statusMessage = "Nie wykryto formularza pytania na stronie."
+                    }
                 }
+            }
+
+            // Jeśli obrazek jest już w base64 z canvasu
+            if let b64 = initialBase64, !b64.isEmpty {
+                executeWithImage(b64)
+            } else if let imgUrlStr = imageUrl, let url = URL(string: imgUrlStr) {
+                // Jeśli canvas był zablokowany przez CORS na Testportalu, Swift pobiera obrazek natywnie
+                var req = URLRequest(url: url)
+                req.timeoutInterval = 4.0
+                URLSession.shared.dataTask(with: req) { imgData, _, _ in
+                    let b64 = imgData?.base64EncodedString()
+                    executeWithImage(b64)
+                }.resume()
             } else {
-                DispatchQueue.main.async {
-                    self.parent.statusMessage = "Nie wykryto formularza pytania na stronie."
-                }
+                executeWithImage(nil)
             }
         }
     }

@@ -2,7 +2,8 @@ import Foundation
 import Combine
 
 /// Zautomatyzowany silnik AI z automatycznym przełączaniem (Failover Pool),
-/// obsługą pytań jedno- i wielokrotnego wyboru (checkboxy), Prawda/Fałsz oraz pytań otwartych.
+/// natywną obsługą widzenia multimodalnego (Google Gemini 2.0 Flash Vision),
+/// pytaniami wielokrotnego wyboru (MDC Checkboxes), Prawda/Fałsz i pytaniami otwartymi.
 public class AIService: ObservableObject {
     public static let shared = AIService()
     
@@ -10,7 +11,6 @@ public class AIService: ObservableObject {
     
     private init() {}
     
-    // Lista darmowych publicznych serwerów AI i modelów
     private struct AIEndpoint {
         let name: String
         let url: String
@@ -25,8 +25,8 @@ public class AIService: ObservableObject {
         AIEndpoint(name: "Pollinations Direct Chat", url: "https://text.pollinations.ai/openai/chat/completions", model: "openai", isGET: false, useJsonMode: false)
     ]
     
-    /// Rozwiązywanie pytania zamkniętego (jedno- lub wielokrotnego wyboru)
-    public func solveClosedQuestion(question: String, options: [String], isMultiple: Bool = false, completion: @escaping (Result<[Int], Error>) -> Void) {
+    /// Rozwiązywanie pytania zamkniętego (jedno- lub wielokrotnego wyboru, Prawda/Fałsz, z opcjonalną grafiką)
+    public func solveClosedQuestion(question: String, options: [String], isMultiple: Bool = false, imageBase64: String? = nil, completion: @escaping (Result<[Int], Error>) -> Void) {
         if options.isEmpty {
             completion(.failure(NSError(domain: "AIService", code: 400, userInfo: [NSLocalizedDescriptionKey: "Brak opcji odpowiedzi."])))
             return
@@ -39,8 +39,12 @@ public class AIService: ObservableObject {
             prompt = """
             You are an expert test solver. This is a MULTIPLE-CHOICE question (checkboxes).
             One, several, or all options can be correct.
-            Read the question and any illustration descriptions carefully.
-            Select ALL correct answers.
+            
+            CRITICAL RULES FOR MULTIPLE CHOICE:
+            1. Analyze each option independently against the question and attached image (if any).
+            2. Select ONLY options that are logically sound and strictly CORRECT.
+            3. NEVER select contradictory options together (e.g. do NOT pick both 'no more than 1 item' and 'no more than 10 items').
+            4. Do NOT blindly select all options. Most questions only have 1 or 2 correct answers out of 3 or 4.
             
             Question:
             \(question)
@@ -48,14 +52,15 @@ public class AIService: ObservableObject {
             Options:
             \(optionsFormatted)
             
-            Return ONLY valid JSON:
-            {"correctIndices": [1, 2], "correctText": "exact text of options"}
+            Return ONLY valid JSON (no markdown formatting):
+            {"correctIndices": [0, 2], "correctText": "exact text of correct options"}
             """
         } else {
             prompt = """
-            You are an expert test solver. This is a SINGLE-CHOICE question (radio or True/False / Prawda/Fałsz).
+            You are an expert test solver. This is a SINGLE-CHOICE question (one option is correct, including True/False or Prawda/Fałsz).
+            If an image is attached, inspect every visual detail of the image carefully before answering.
             Determine exactly ONE correct answer from the provided options.
-            Do NOT automatically pick the first option. Actually analyze the question, image context, and all options.
+            Do NOT default to option 0.
             
             Question:
             \(question)
@@ -63,29 +68,29 @@ public class AIService: ObservableObject {
             Options:
             \(optionsFormatted)
             
-            Return ONLY valid JSON:
+            Return ONLY valid JSON (no markdown formatting):
             {"correctIndices": [1], "correctText": "exact text of chosen option"}
             """
         }
         
-        // Jeśli użytkownik skonfigurował klucz Gemini API
+        // Jeśli użytkownik skonfigurował klucz Gemini API (pełne widzenie multimodalne + 0ms opóźnienia)
         if !apiKey.isEmpty {
-            sendGeminiOrCustomKeyRequest(prompt: prompt, key: apiKey) { result in
+            sendGeminiOrCustomKeyRequest(prompt: prompt, key: apiKey, imageBase64: imageBase64) { result in
                 switch result {
                 case .success(let text):
                     let indices = self.parseIndicesFromText(text, options: options, question: question, isMultiple: isMultiple)
                     completion(.success(indices))
                 case .failure(_):
-                    self.runAutoFreePool(prompt: prompt, options: options, question: question, isMultiple: isMultiple, completion: completion)
+                    self.runAutoFreePool(prompt: prompt, options: options, question: question, isMultiple: isMultiple, imageBase64: imageBase64, completion: completion)
                 }
             }
         } else {
-            runAutoFreePool(prompt: prompt, options: options, question: question, isMultiple: isMultiple, completion: completion)
+            runAutoFreePool(prompt: prompt, options: options, question: question, isMultiple: isMultiple, imageBase64: imageBase64, completion: completion)
         }
     }
     
     /// Rozwiązywanie pytania otwartego
-    public func solveOpenQuestion(question: String, completion: @escaping (Result<String, Error>) -> Void) {
+    public func solveOpenQuestion(question: String, imageBase64: String? = nil, completion: @escaping (Result<String, Error>) -> Void) {
         let prompt = """
         Jesteś ekspertem rozwiązującym test. Odpowiedz na poniższe pytanie otwarte krótko, precyzyjnie i rzeczowo (1-5 słów lub konkretne pojęcie/wartość):
         
@@ -97,7 +102,7 @@ public class AIService: ObservableObject {
         """
         
         if !apiKey.isEmpty {
-            sendGeminiOrCustomKeyRequest(prompt: prompt, key: apiKey) { result in
+            sendGeminiOrCustomKeyRequest(prompt: prompt, key: apiKey, imageBase64: imageBase64) { result in
                 switch result {
                 case .success(let text):
                     let ans = self.parseAnswerFromText(text, fallbackQuestion: question)
@@ -111,8 +116,8 @@ public class AIService: ObservableObject {
         }
     }
     
-    // MARK: - Przechodzenie po puli serwerów dla pytań zamkniętych
-    private func runAutoFreePool(prompt: String, options: [String], question: String, isMultiple: Bool, completion: @escaping (Result<[Int], Error>) -> Void) {
+    // MARK: - Przechodzenie po puli darmowej
+    private func runAutoFreePool(prompt: String, options: [String], question: String, isMultiple: Bool, imageBase64: String?, completion: @escaping (Result<[Int], Error>) -> Void) {
         tryNextFreeEndpoint(prompt: prompt, endpoints: freeEndpoints) { result in
             switch result {
             case .success(let text):
@@ -125,7 +130,6 @@ public class AIService: ObservableObject {
         }
     }
     
-    // MARK: - Przechodzenie po puli serwerów dla pytań otwartych
     private func runAutoFreeOpenPool(prompt: String, question: String, completion: @escaping (Result<String, Error>) -> Void) {
         tryNextFreeEndpoint(prompt: prompt, endpoints: freeEndpoints) { result in
             switch result {
@@ -138,7 +142,7 @@ public class AIService: ObservableObject {
         }
     }
     
-    // MARK: - Obsługa zapytań HTTP do darmowych bramek
+    // MARK: - Zapytania HTTP
     private func tryNextFreeEndpoint(prompt: String, endpoints: [AIEndpoint], completion: @escaping (Result<String, Error>) -> Void) {
         guard let current = endpoints.first else {
             completion(.failure(NSError(domain: "AIService", code: 500, userInfo: [NSLocalizedDescriptionKey: "Wszystkie serwery w puli darmowej nie odpowiedziały."])))
@@ -159,7 +163,7 @@ public class AIService: ObservableObject {
             }
             
             var req = URLRequest(url: url)
-            req.timeoutInterval = 8.0
+            req.timeoutInterval = 7.0
             req.setValue("https://pollinations.ai/", forHTTPHeaderField: "Referer")
             req.setValue("https://pollinations.ai", forHTTPHeaderField: "Origin")
             req.setValue("Mozilla/5.0 (iPhone; CPU iPhone OS 17_5 like Mac OS X) AppleWebKit/605.1.15", forHTTPHeaderField: "User-Agent")
@@ -185,7 +189,7 @@ public class AIService: ObservableObject {
             req.setValue("https://pollinations.ai/", forHTTPHeaderField: "Referer")
             req.setValue("https://pollinations.ai", forHTTPHeaderField: "Origin")
             req.setValue("Mozilla/5.0 (iPhone; CPU iPhone OS 17_5 like Mac OS X) AppleWebKit/605.1.15", forHTTPHeaderField: "User-Agent")
-            req.timeoutInterval = 8.0
+            req.timeoutInterval = 7.0
             
             var body: [String: Any] = [
                 "model": current.model,
@@ -207,7 +211,6 @@ public class AIService: ObservableObject {
                     return
                 }
                 
-                // Sprawdzamy czy to format OpenAI choices
                 if let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
                    let choices = json["choices"] as? [[String: Any]],
                    let first = choices.first,
@@ -217,7 +220,6 @@ public class AIService: ObservableObject {
                     return
                 }
                 
-                // Sprawdzamy bezpośredni format text/json Pollinations
                 if let text = String(data: data, encoding: .utf8), !text.isEmpty && !self.isErrorResponse(text) {
                     completion(.success(text))
                     return
@@ -228,7 +230,6 @@ public class AIService: ObservableObject {
         }
     }
     
-    // Walidator odrzucający odpowiedzi ze stronami błędów 404, rate-limitów i HTML
     private func isErrorResponse(_ text: String) -> Bool {
         let lower = text.lowercased()
         if lower.contains("<!doctype") || lower.contains("<html") || lower.contains("<body") {
@@ -243,8 +244,8 @@ public class AIService: ObservableObject {
         return false
     }
     
-    // Zapytanie do oficjalnego Google Gemini API (darmowy tier z Google AI Studio: 15 RPM, Vision)
-    private func sendGeminiOrCustomKeyRequest(prompt: String, key: String, completion: @escaping (Result<String, Error>) -> Void) {
+    // Multimodalne zapytanie do Google Gemini 2.0 Flash (natywne widzenie grafiki i zdjęć)
+    private func sendGeminiOrCustomKeyRequest(prompt: String, key: String, imageBase64: String? = nil, completion: @escaping (Result<String, Error>) -> Void) {
         let endpoint = "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=\(key)"
         guard let url = URL(string: endpoint) else {
             completion(.failure(NSError(domain: "AIService", code: 400, userInfo: nil)))
@@ -256,8 +257,22 @@ public class AIService: ObservableObject {
         req.setValue("application/json", forHTTPHeaderField: "Content-Type")
         req.timeoutInterval = 12.0
         
+        var parts: [[String: Any]] = []
+        
+        // Dołączenie obrazu do modelu multimodalnego
+        if let base64 = imageBase64, !base64.isEmpty {
+            parts.append([
+                "inlineData": [
+                    "mimeType": "image/jpeg",
+                    "data": base64
+                ]
+            ])
+        }
+        
+        parts.append(["text": prompt])
+        
         let body: [String: Any] = [
-            "contents": [["parts": [["text": prompt]]]],
+            "contents": [["parts": parts]],
             "generationConfig": [
                 "temperature": 0.1,
                 "responseMimeType": "application/json"
@@ -284,7 +299,7 @@ public class AIService: ObservableObject {
         }.resume()
     }
     
-    // MARK: - Parsowanie odpowiedzi i indeksów opcji
+    // MARK: - Parsowanie odpowiedzi
     private func parseIndicesFromText(_ text: String, options: [String], question: String, isMultiple: Bool) -> [Int] {
         let count = options.count
         if count <= 1 { return [0] }
@@ -295,11 +310,9 @@ public class AIService: ObservableObject {
         
         var resolvedIndices: [Int] = []
         
-        // 1. Parsowanie struktury JSON
         if let data = clean.data(using: .utf8),
            let dict = try? JSONSerialization.jsonObject(with: data) as? [String: Any] {
             
-            // a) Sprawdzamy tablicę "correctIndices"
             if let arr = dict["correctIndices"] as? [Int] {
                 for i in arr where i >= 0 && i < count {
                     if !resolvedIndices.contains(i) { resolvedIndices.append(i) }
@@ -312,7 +325,6 @@ public class AIService: ObservableObject {
                 }
             }
             
-            // b) Sprawdzamy pojedynczy "correctIndex"
             if resolvedIndices.isEmpty {
                 if let single = dict["correctIndex"] as? Int, single >= 0 && single < count {
                     resolvedIndices.append(single)
@@ -321,7 +333,6 @@ public class AIService: ObservableObject {
                 }
             }
             
-            // c) Dopasowanie po treści w "correctText"
             if let textVal = (dict["correctText"] as? String) ?? (dict["answer"] as? String), !textVal.isEmpty {
                 let cleanVal = textVal.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
                 for (idx, opt) in options.enumerated() {
@@ -337,7 +348,6 @@ public class AIService: ObservableObject {
             return isMultiple ? resolvedIndices : [resolvedIndices[0]]
         }
         
-        // 2. Szukamy dopasowania po pełnej treści opcji w wygenerowanym tekście
         let lowerClean = clean.lowercased()
         for (idx, opt) in options.enumerated() {
             let cleanOpt = opt.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
@@ -350,7 +360,6 @@ public class AIService: ObservableObject {
             return isMultiple ? resolvedIndices : [resolvedIndices[0]]
         }
         
-        // 3. Fallback do inteligentnego solvera
         return fallbackSmartSolver(question: question, options: options, isMultiple: isMultiple)
     }
     
@@ -372,7 +381,6 @@ public class AIService: ObservableObject {
             }
         }
         
-        // Jeśli odpowiedź jest w formacie "answer: ..."
         if let colonIndex = clean.firstIndex(of: ":") {
             let afterColon = String(clean[clean.index(after: colonIndex)...]).trimmingCharacters(in: .whitespacesAndNewlines)
             if !afterColon.isEmpty && !isErrorResponse(afterColon) {
@@ -383,14 +391,13 @@ public class AIService: ObservableObject {
         return clean.isEmpty ? synthesizeFallbackOpenAnswer(question: fallbackQuestion) : clean
     }
     
-    // Synteza sensownej odpowiedzi na wypadek braku łączności
     private func synthesizeFallbackOpenAnswer(question: String) -> String {
         let q = question.lowercased()
         if q.contains("kto") || q.contains("nazwisko") || q.contains("autor") {
             return "Administrator"
         }
         if q.contains("gdzie") || q.contains("miejsce") {
-            return "W systemie"
+            return "W bazie danych"
         }
         if q.contains("ile") || q.contains("liczba") || q.contains("rok") {
             return "1"
@@ -398,14 +405,14 @@ public class AIService: ObservableObject {
         return "Zgodnie z procedurą"
     }
     
-    // Algorytm zapasowy wyznaczający odpowiedzi na podstawie analizy semantycznej pytania i opcji
+    // MARK: - Inteligentny algorytm zapasowy (ulepszony o ważenie semantyczne procedur)
     private func fallbackSmartSolver(question: String, options: [String], isMultiple: Bool) -> [Int] {
         let count = options.count
         if count <= 1 { return [0] }
         
         let normalized = options.map { $0.trimmingCharacters(in: .whitespacesAndNewlines).lowercased() }
         
-        // Obsługa pytań Prawda / Fałsz
+        // Prawda / Fałsz
         let isTrueFalse = count == 2 && (
             (normalized.contains("prawda") && normalized.contains("fałsz")) ||
             (normalized.contains("true") && normalized.contains("false")) ||
@@ -413,14 +420,13 @@ public class AIService: ObservableObject {
         )
         
         if isTrueFalse {
-            // W testach twierdzenia zazwyczaj częściej są prawdziwe
             if let pIdx = normalized.firstIndex(where: { $0 == "prawda" || $0 == "true" || $0 == "tak" }) {
                 return [pIdx]
             }
             return [0]
         }
         
-        // Analiza nakładania słów kluczowych między pytaniem a opcjami
+        // Analiza słów kluczowych pytania
         let questionWords = Set(
             question.lowercased()
                 .components(separatedBy: CharacterSet.alphanumerics.inverted)
@@ -440,8 +446,16 @@ public class AIService: ObservableObject {
         let maxScore = scores.max() ?? 0
         if maxScore > 0 {
             if isMultiple {
-                let matched = scores.enumerated().filter { $0.element >= max(1, maxScore - 1) }.map { $0.offset }
-                if !matched.isEmpty { return matched }
+                // Wybieramy opcje z najwyższym wynikiem, ale MAKSYMALNIE 2 (nigdy wszystkie!)
+                let sorted = scores.enumerated().sorted(by: { $0.element > $1.element })
+                var selected: [Int] = []
+                let topScore = sorted.first?.element ?? 0
+                for item in sorted where item.element >= topScore && selected.count < 2 {
+                    selected.append(item.offset)
+                }
+                if !selected.isEmpty && selected.count < count {
+                    return selected.sorted()
+                }
             } else {
                 if let best = scores.firstIndex(of: maxScore) {
                     return [best]
@@ -449,24 +463,25 @@ public class AIService: ObservableObject {
             }
         }
         
-        // Jeśli brak dopasowania słów kluczowych:
-        // W pytaniach jednokrotnych opcje najbardziej merytoryczne (dłuższe i zawierające warunki 'pod warunkiem', 'zależy', 'wymaga') mają najwyższe prawdopodobieństwo
-        var qualityScores = [Int](repeating: 0, count: count)
-        let nuanceKeywords = ["zależy", "wymaga", "pod warunkiem", "zgodnie", "wsparcia", "zgłoszę", "procedur", "zależności"]
+        // Analiza autorytatywna procedur firmowych (FAQ, baza danych, przełożony mają wyższy priorytet niż pytam kolegę czy anuluję)
+        let authorityKeywords = ["baza danych", "faq", "systemie", "przełożon", "wsparcia", "zgłoszę", "procedur", "zgodnie", "zależy", "autoryzacj"]
+        let casualKeywords = ["koleg", "anuluj", "odrzuć", "zignoruj"]
+        
+        var authorityScores = [Int](repeating: 0, count: count)
         for (i, opt) in normalized.enumerated() {
-            for kw in nuanceKeywords where opt.contains(kw) {
-                qualityScores[i] += 3
+            for kw in authorityKeywords where opt.contains(kw) {
+                authorityScores[i] += 5
             }
-            qualityScores[i] += min(opt.count / 20, 2)
+            for kw in casualKeywords where opt.contains(kw) {
+                authorityScores[i] -= 5
+            }
         }
         
-        let bestQuality = qualityScores.max() ?? 0
-        if bestQuality > 0, let best = qualityScores.firstIndex(of: bestQuality) {
-            return isMultiple ? [best] : [best]
+        let bestAuthority = authorityScores.max() ?? 0
+        if bestAuthority > 0, let best = authorityScores.firstIndex(of: bestAuthority) {
+            return [best]
         }
         
-        // Ostateczny fallback: środkowa opcja zamiast pierwszej z góry (mniejsza wykrywalność i mniejszy bias na opcję 0)
-        let middleIndex = min(1, count - 1)
-        return [middleIndex]
+        return [0]
     }
 }
