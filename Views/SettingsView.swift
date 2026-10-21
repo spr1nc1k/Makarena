@@ -1,14 +1,13 @@
 import SwiftUI
 
 private extension Color {
-    static let mkNavy = Color(red: 0.039, green: 0.055, blue: 0.102)
-    static let mkSurface = Color(red: 0.067, green: 0.082, blue: 0.141)
-    static let mkAccent = Color(red: 0.310, green: 0.557, blue: 1.0)
-    static let mkPurple = Color(red: 0.482, green: 0.361, blue: 1.0)
-    static let mkGreen = Color(red: 0.204, green: 0.827, blue: 0.600)
-    static let mkRed = Color(red: 1.0, green: 0.278, blue: 0.341)
-    static let mkTextPrimary = Color.white
-    static let mkTextSecondary = Color(white: 0.55)
+    static let oledBlack = Color(red: 0.02, green: 0.02, blue: 0.04)
+    static let glassSurface = Color(red: 0.07, green: 0.09, blue: 0.16).opacity(0.85)
+    static let neonCyan = Color(red: 0.15, green: 0.78, blue: 1.0)
+    static let neonPurple = Color(red: 0.65, green: 0.35, blue: 1.0)
+    static let neonGreen = Color(red: 0.18, green: 0.95, blue: 0.60)
+    static let textBright = Color.white
+    static let textMuted = Color(white: 0.60)
 }
 
 struct SettingsView: View {
@@ -21,78 +20,78 @@ struct SettingsView: View {
     var body: some View {
         NavigationView {
             ZStack {
-                Color.mkNavy.ignoresSafeArea()
+                Color.oledBlack.ignoresSafeArea()
                 
                 ScrollView {
                     VStack(spacing: 20) {
                         // AI Engine Section
-                        settingsSection(title: "Silnik AI (100% Darmowy)") {
-                            VStack(alignment: .leading, spacing: 10) {
+                        settingsSection(title: "Silnik AI i Widzenie (Vision)") {
+                            VStack(alignment: .leading, spacing: 12) {
                                 HStack(spacing: 8) {
-                                    Image(systemName: "checkmark.seal.fill")
-                                        .foregroundColor(.mkGreen)
+                                    Image(systemName: "sparkles")
+                                        .foregroundColor(.neonCyan)
                                         .font(.system(size: 16))
-                                    Text("Automatyczna Pula Darmowych Serwerów AI")
+                                    Text("Automatyczna Pula Publiczna")
                                         .font(.system(size: 14, weight: .semibold))
-                                        .foregroundColor(.mkTextPrimary)
+                                        .foregroundColor(.white)
                                 }
                                 
-                                Text("Aplikacja automatycznie przechodzi po puli bezpłatnych serwerów. Użytkownik nie musi niczego konfigurować.")
+                                Text("Aplikacja automatycznie przechodzi po puli serwerów do rozwiązywania pytań tekstowych.")
                                     .font(.system(size: 12))
-                                    .foregroundColor(.mkTextSecondary)
+                                    .foregroundColor(.textMuted)
                                 
                                 Divider().background(Color.white.opacity(0.08))
                                 
                                 VStack(alignment: .leading, spacing: 6) {
-                                    Text("Własny darmowy Klucz Gemini API (Zalecany):")
-                                        .font(.system(size: 12, weight: .medium))
-                                        .foregroundColor(.mkTextPrimary)
-                                    Text("Daje 0ms opóźnienia, brak limitów 30s oraz pełną analizę ilustracji i zadań ze zdjęciami.")
+                                    Text("Klucz Google Gemini 2.0 Flash Vision (Zalecany):")
+                                        .font(.system(size: 12, weight: .semibold))
+                                        .foregroundColor(.neonCyan)
+                                    Text("Daje 100% poprawności, brak limitów czasowych oraz natywne widzenie wykresów, tabel i wzorców graficznych.")
                                         .font(.system(size: 11))
-                                        .foregroundColor(.mkTextSecondary)
+                                        .foregroundColor(.textMuted)
                                     
-                                    SecureField("Wklej klucz API (AIzaSy...)", text: $apiKey)
+                                    SecureField("AIzaSy...", text: $apiKey)
                                         .font(.system(size: 13, design: .monospaced))
                                         .autocapitalization(.none)
                                         .disableAutocorrection(true)
-                                        .padding(10)
-                                        .background(Color.mkNavy)
-                                        .clipShape(RoundedRectangle(cornerRadius: 8))
+                                        .padding(12)
+                                        .background(Color.white.opacity(0.04))
+                                        .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
                                         .overlay(
-                                            RoundedRectangle(cornerRadius: 8)
-                                                .stroke(Color.white.opacity(0.1), lineWidth: 0.5)
+                                            RoundedRectangle(cornerRadius: 12, style: .continuous)
+                                                .stroke(Color.white.opacity(0.12), lineWidth: 0.8)
                                         )
                                     
                                     Link(destination: URL(string: "https://aistudio.google.com/app/apikey")!) {
                                         HStack(spacing: 5) {
                                             Image(systemName: "arrow.up.right.square")
-                                            Text("Otwórz Google AI Studio i pobierz darmowy klucz")
+                                            Text("Pobierz darmowy klucz z Google AI Studio")
                                         }
                                         .font(.system(size: 11, weight: .semibold))
-                                        .foregroundColor(.mkAccent)
+                                        .foregroundColor(.neonCyan)
                                     }
-                                    .padding(.top, 2)
+                                    .padding(.top, 4)
                                 }
                             }
                         }
                         
                         // Update Section
-                        settingsSection(title: "Automatyczne Aktualizacje") {
+                        settingsSection(title: "Aktualizacje Stealth OTA") {
                             VStack(alignment: .leading, spacing: 12) {
                                 VStack(alignment: .leading, spacing: 4) {
-                                    Text("Adres Serwera Aktualizacji (GitHub / Cloudflare)")
+                                    Text("Adres Repozytorium")
                                         .font(.system(size: 11))
-                                        .foregroundColor(.mkTextSecondary)
+                                        .foregroundColor(.textMuted)
                                     TextField("https://raw.githubusercontent.com/spr1nc1k/Makarena/main", text: $serverURLInput)
                                         .font(.system(size: 12, design: .monospaced))
                                         .autocapitalization(.none)
                                         .disableAutocorrection(true)
-                                        .padding(10)
-                                        .background(Color.mkNavy)
-                                        .clipShape(RoundedRectangle(cornerRadius: 8))
+                                        .padding(12)
+                                        .background(Color.white.opacity(0.04))
+                                        .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
                                         .overlay(
-                                            RoundedRectangle(cornerRadius: 8)
-                                                .stroke(Color.white.opacity(0.1), lineWidth: 0.5)
+                                            RoundedRectangle(cornerRadius: 12, style: .continuous)
+                                                .stroke(Color.white.opacity(0.1), lineWidth: 0.8)
                                         )
                                 }
                                 
@@ -100,33 +99,33 @@ struct SettingsView: View {
                                     VStack(alignment: .leading, spacing: 2) {
                                         Text("Wersja aplikacji")
                                             .font(.system(size: 14, weight: .semibold))
-                                            .foregroundColor(.mkTextPrimary)
+                                            .foregroundColor(.white)
                                         Text("Bieżąca: v\(updateService.currentAppVersion)")
                                             .font(.system(size: 12))
-                                            .foregroundColor(.mkTextSecondary)
+                                            .foregroundColor(.textMuted)
                                         if !updateService.latestVersion.isEmpty {
-                                            Text("Najnowsza: v\(updateService.latestVersion)")
+                                            Text("Dostępna: v\(updateService.latestVersion)")
                                                 .font(.system(size: 12))
-                                                .foregroundColor(updateService.updateAvailable ? .mkGreen : .mkTextSecondary)
+                                                .foregroundColor(updateService.updateAvailable ? .neonGreen : .textMuted)
                                         }
                                     }
                                     Spacer()
 
                                     if updateService.isChecking {
                                         ProgressView()
-                                            .tint(.mkAccent)
+                                            .tint(.neonCyan)
                                     } else {
                                         Button {
                                             updateService.serverURL = serverURLInput
                                             updateService.checkForUpdates { _, _ in }
                                         } label: {
                                             Text("Sprawdź")
-                                                .font(.system(size: 13, weight: .semibold))
-                                                .foregroundColor(.mkNavy)
+                                                .font(.system(size: 13, weight: .bold))
+                                                .foregroundColor(.black)
                                                 .padding(.horizontal, 16)
                                                 .padding(.vertical, 8)
-                                                .background(Color.mkAccent)
-                                                .clipShape(RoundedRectangle(cornerRadius: 8))
+                                                .background(Color.neonCyan)
+                                                .clipShape(Capsule())
                                         }
                                     }
                                 }
@@ -134,76 +133,31 @@ struct SettingsView: View {
                                 if !updateService.updateStatusMessage.isEmpty {
                                     Text(updateService.updateStatusMessage)
                                         .font(.system(size: 12))
-                                        .foregroundColor(updateService.updateAvailable ? .mkGreen : .mkTextSecondary)
+                                        .foregroundColor(updateService.updateAvailable ? .neonGreen : .textMuted)
                                 }
 
                                 if updateService.updateAvailable {
                                     VStack(alignment: .leading, spacing: 8) {
-                                        Text("Lista zmian (Changelog):")
+                                        Text("Dziennik zmian:")
                                             .font(.system(size: 12, weight: .semibold))
-                                            .foregroundColor(.mkTextPrimary)
+                                            .foregroundColor(.white)
                                         Text(updateService.changelog)
                                             .font(.system(size: 12))
-                                            .foregroundColor(.mkTextSecondary)
+                                            .foregroundColor(.textMuted)
 
                                         Button {
                                             updateService.performUpdate()
                                         } label: {
-                                            HStack {
-                                                Image(systemName: "arrow.down.app.fill")
-                                                Text("Zaktualizuj Teraz")
-                                            }
-                                            .font(.system(size: 14, weight: .semibold))
-                                            .frame(maxWidth: .infinity)
-                                            .padding(.vertical, 10)
-                                            .background(
-                                                LinearGradient(colors: [.mkAccent, .mkPurple], startPoint: .leading, endPoint: .trailing)
-                                            )
-                                            .foregroundColor(.white)
-                                            .clipShape(RoundedRectangle(cornerRadius: 10))
+                                            Text("Zainstaluj aktualizację")
+                                                .font(.system(size: 13, weight: .bold))
+                                                .foregroundColor(.white)
+                                                .frame(maxWidth: .infinity)
+                                                .padding(.vertical, 10)
+                                                .background(Color.neonGreen)
+                                                .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
                                         }
                                     }
-                                }
-                            }
-                        }
-                        
-                        // Volume instructions
-                        settingsSection(title: "Instrukcja przycisków głośności") {
-                            VStack(spacing: 12) {
-                                HStack(spacing: 12) {
-                                    Image(systemName: "speaker.wave.1.fill")
-                                        .foregroundColor(.mkGreen)
-                                        .frame(width: 32, height: 32)
-                                        .background(Color.mkGreen.opacity(0.12))
-                                        .clipShape(RoundedRectangle(cornerRadius: 8))
-                                    VStack(alignment: .leading, spacing: 2) {
-                                        Text("Głośność w dół")
-                                            .font(.system(size: 14, weight: .semibold))
-                                            .foregroundColor(.mkTextPrimary)
-                                        Text("Włącza AI Solve (Wyświetla powiadomienie 'Włączone')")
-                                            .font(.system(size: 11))
-                                            .foregroundColor(.mkTextSecondary)
-                                    }
-                                    Spacer()
-                                }
-                                
-                                Divider().background(Color.white.opacity(0.06))
-                                
-                                HStack(spacing: 12) {
-                                    Image(systemName: "speaker.wave.3.fill")
-                                        .foregroundColor(.mkRed)
-                                        .frame(width: 32, height: 32)
-                                        .background(Color.mkRed.opacity(0.12))
-                                        .clipShape(RoundedRectangle(cornerRadius: 8))
-                                    VStack(alignment: .leading, spacing: 2) {
-                                        Text("Głośność w górę")
-                                            .font(.system(size: 14, weight: .semibold))
-                                            .foregroundColor(.mkTextPrimary)
-                                        Text("Włącza Panic Mode (Wyświetla powiadomienie 'Wyłączone')")
-                                            .font(.system(size: 11))
-                                            .foregroundColor(.mkTextSecondary)
-                                    }
-                                    Spacer()
+                                    .padding(.top, 4)
                                 }
                             }
                         }
@@ -211,37 +165,35 @@ struct SettingsView: View {
                     .padding(16)
                 }
             }
-            .navigationTitle("Ustawienia Makarena")
+            .navigationTitle("Ustawienia Systemu")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .confirmationAction) {
-                    Button("Gotowe") {
-                        AIService.shared.apiKey = apiKey
+                    Button("Zapisz") {
                         dismiss()
                     }
-                    .foregroundColor(.mkAccent)
+                    .foregroundColor(.neonCyan)
                 }
             }
         }
         .preferredColorScheme(.dark)
     }
-    
-    // MARK: - Section Builder
-    
+
     private func settingsSection<Content: View>(title: String, @ViewBuilder content: () -> Content) -> some View {
-        VStack(alignment: .leading, spacing: 12) {
+        VStack(alignment: .leading, spacing: 10) {
             Text(title.uppercased())
-                .font(.system(size: 11, weight: .bold, design: .rounded))
-                .foregroundColor(.mkTextSecondary)
-                .tracking(1.2)
-            
+                .font(.system(size: 11, weight: .bold, design: .monospaced))
+                .foregroundColor(.textMuted)
+                .tracking(1.4)
+                .padding(.horizontal, 4)
+
             content()
                 .padding(16)
-                .background(Color.mkSurface)
-                .clipShape(RoundedRectangle(cornerRadius: 14))
+                .background(Color.glassSurface)
+                .clipShape(RoundedRectangle(cornerRadius: 20, style: .continuous))
                 .overlay(
-                    RoundedRectangle(cornerRadius: 14)
-                        .stroke(Color.white.opacity(0.06), lineWidth: 0.5)
+                    RoundedRectangle(cornerRadius: 20, style: .continuous)
+                        .stroke(Color.white.opacity(0.08), lineWidth: 0.8)
                 )
         }
     }

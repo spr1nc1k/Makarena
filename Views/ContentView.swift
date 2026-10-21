@@ -1,17 +1,17 @@
 import SwiftUI
 import WebKit
 
-// MARK: - Color Palette
+// MARK: - 2026 Cyber Aesthetic Color Palette
 
 private extension Color {
-    static let mkNavy = Color(red: 0.039, green: 0.055, blue: 0.102)       // #0A0E1A
-    static let mkSurface = Color(red: 0.067, green: 0.082, blue: 0.141)    // #111524
-    static let mkAccent = Color(red: 0.310, green: 0.557, blue: 1.0)       // #4F8EFF
-    static let mkPurple = Color(red: 0.482, green: 0.361, blue: 1.0)       // #7B5CFF
-    static let mkGreen = Color(red: 0.204, green: 0.827, blue: 0.600)      // #34D399
-    static let mkRed = Color(red: 1.0, green: 0.278, blue: 0.341)          // #FF4757
-    static let mkTextPrimary = Color.white
-    static let mkTextSecondary = Color(white: 0.55)
+    static let oledBlack = Color(red: 0.02, green: 0.02, blue: 0.04)
+    static let glassSurface = Color(red: 0.07, green: 0.09, blue: 0.16).opacity(0.85)
+    static let neonCyan = Color(red: 0.15, green: 0.78, blue: 1.0)          // #26C6FF
+    static let neonPurple = Color(red: 0.65, green: 0.35, blue: 1.0)        // #A659FF
+    static let neonGreen = Color(red: 0.18, green: 0.95, blue: 0.60)        // #2EF299
+    static let neonRed = Color(red: 1.0, green: 0.22, blue: 0.38)           // #FF3860
+    static let textBright = Color.white
+    static let textMuted = Color(white: 0.60)
 }
 
 // MARK: - ContentView
@@ -31,13 +31,18 @@ struct ContentView: View {
     @AppStorage("gemini_api_key") private var apiKey: String = ""
     @AppStorage("makarena_ai_active") private var isAIActive: Bool = false
 
+    // Splash Screen State
+    @State private var showSplash: Bool = true
+    @State private var splashOpacity: Double = 1.0
+    @State private var splashScale: CGFloat = 0.88
+    @State private var splashGlow: Bool = false
+
     public enum NotificationState {
         case activatedAI
         case deactivatedPanic
     }
     
     @State private var activeNotification: NotificationState? = nil
-    @State private var fabPulse: Bool = false
     
     private var activeTab: WebTab? {
         tabs.first(where: { $0.id == activeTabId }) ?? tabs.first
@@ -45,20 +50,20 @@ struct ContentView: View {
 
     var body: some View {
         ZStack {
-            Color.mkNavy.ignoresSafeArea()
+            Color.oledBlack.ignoresSafeArea()
             
             VStack(spacing: 0) {
-                // 1. Progress bar at top
+                // 1. Neon loading line at top
                 if activeTab?.isLoading == true {
                     ProgressView()
                         .progressViewStyle(.linear)
-                        .tint(.mkAccent)
+                        .tint(.neonCyan)
                         .frame(height: 2)
                         .transition(.opacity)
                 }
                 
-                // 2. WebView — full bleed
-                ZStack(alignment: .topTrailing) {
+                // 2. Full-bleed WebView + Dynamic Status Island
+                ZStack(alignment: .top) {
                     if let tab = activeTab {
                         StealthWebView(
                             urlString: Binding(
@@ -79,42 +84,28 @@ struct ContentView: View {
                         .id(tab.id)
                     }
                     
-                    // 3. Notification overlay
-                    if let notification = activeNotification {
-                        notificationBadge(notification)
-                            .transition(.move(edge: .top).combined(with: .opacity))
+                    // Floating Dynamic Island Capsule (Status Indicator)
+                    topDynamicPill
+                        .padding(.top, 8)
+                }
+                
+                // Invisible double-tap gesture zone (safety switch)
+                Color.clear
+                    .contentShape(Rectangle())
+                    .frame(height: 14)
+                    .onTapGesture(count: 2) {
+                        toggleAIState()
                     }
-                }
                 
-                // Gesture zone
-                HStack(spacing: 0) {
-                    Color.clear
-                        .contentShape(Rectangle())
-                        .onTapGesture(count: 2) {
-                            triggerPanicMode()
-                        }
-                    Color.clear
-                        .contentShape(Rectangle())
-                        .onTapGesture(count: 2) {
-                            triggerAIAnalysis()
-                        }
-                }
-                .frame(height: 18)
-                .background(Color.clear)
-                
-                // 4. Bottom toolbar
-                bottomToolbar
+                // 3. Futuristic Floating Dock
+                floatingDock
+                    .padding(.horizontal, 14)
+                    .padding(.bottom, 8)
             }
             
-            // 5. FAB — bottom right, above toolbar
-            VStack {
-                Spacer()
-                HStack {
-                    Spacer()
-                    fabButton
-                        .padding(.trailing, 16)
-                        .padding(.bottom, 70)
-                }
+            // 4. Splash Screen Overlay
+            if showSplash {
+                splashScreenOverlay
             }
         }
         .preferredColorScheme(.dark)
@@ -124,14 +115,16 @@ struct ContentView: View {
             }
             AIService.shared.apiKey = apiKey
             volumeObserver.startObserving()
-            startFabPulse()
+            startSplashAnimation()
         }
         .onReceive(volumeObserver.$lastTriggeredAction) { action in
             guard let action = action else { return }
             switch action {
             case .triggerAI:
-                triggerAIAnalysis()
+                // 2x głośność w dół działa jako przełącznik (WŁĄCZ / WYŁĄCZ)
+                toggleAIState()
             case .triggerPanic:
+                // 2x głośność w górę = bezwarunkowy Panic Mode
                 triggerPanicMode()
             }
             volumeObserver.lastTriggeredAction = nil
@@ -155,91 +148,248 @@ struct ContentView: View {
         }
     }
     
-    // MARK: - Bottom Toolbar
+    // MARK: - Splash Screen
     
-    private var bottomToolbar: some View {
-        HStack(spacing: 0) {
-            // Back
-            toolbarButton(icon: "chevron.left", disabled: activeTab?.webView.canGoBack != true) {
+    private var splashScreenOverlay: some View {
+        ZStack {
+            Color.oledBlack.ignoresSafeArea()
+            
+            // Neon Ambient Glow
+            RadialGradient(
+                colors: [Color.neonCyan.opacity(0.18), Color.neonPurple.opacity(0.08), Color.clear],
+                center: .center,
+                startRadius: 20,
+                endRadius: 300
+            )
+            .ignoresSafeArea()
+            
+            VStack(spacing: 22) {
+                // Logo z pobranych (white_solution_transparent.png)
+                if let uiImage = UIImage(named: "SplashLogo") ?? (Bundle.main.path(forResource: "white_solution_transparent", ofType: "png").flatMap { UIImage(contentsOfFile: $0) }) {
+                    Image(uiImage: uiImage)
+                        .resizable()
+                        .scaledToFit()
+                        .frame(maxWidth: 260, maxHeight: 150)
+                        .shadow(color: .neonCyan.opacity(splashGlow ? 0.8 : 0.2), radius: splashGlow ? 28 : 10)
+                } else {
+                    Image(systemName: "bolt.shield.fill")
+                        .font(.system(size: 68, weight: .ultraLight))
+                        .foregroundColor(.neonCyan)
+                }
+                
+                VStack(spacing: 6) {
+                    Text("WHITE SOLUTION")
+                        .font(.system(size: 15, weight: .black, design: .monospaced))
+                        .tracking(6)
+                        .foregroundColor(.white)
+                    
+                    Text("STEALTH RUNTIME 2026")
+                        .font(.system(size: 10, weight: .bold, design: .monospaced))
+                        .tracking(3)
+                        .foregroundColor(.neonCyan)
+                }
+                
+                // Micro-loader capsule
+                ZStack(alignment: .leading) {
+                    Capsule()
+                        .fill(Color.white.opacity(0.08))
+                        .frame(width: 140, height: 3)
+                    
+                    Capsule()
+                        .fill(
+                            LinearGradient(
+                                colors: [.neonCyan, .neonPurple],
+                                startPoint: .leading,
+                                endPoint: .trailing
+                            )
+                        )
+                        .frame(width: splashGlow ? 140 : 20, height: 3)
+                }
+            }
+            .scaleEffect(splashScale)
+            .opacity(splashOpacity)
+        }
+        .transition(.opacity)
+        .zIndex(999)
+        .onTapGesture {
+            dismissSplash()
+        }
+    }
+    
+    private func startSplashAnimation() {
+        withAnimation(.easeOut(duration: 0.9)) {
+            splashScale = 1.0
+            splashGlow = true
+        }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 1.8) {
+            dismissSplash()
+        }
+    }
+    
+    private func dismissSplash() {
+        withAnimation(.easeInOut(duration: 0.45)) {
+            splashOpacity = 0.0
+        }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.45) {
+            showSplash = false
+        }
+    }
+    
+    // MARK: - Top Dynamic Island Pill
+    
+    private var topDynamicPill: some View {
+        Group {
+            if let notif = activeNotification {
+                HStack(spacing: 8) {
+                    Circle()
+                        .fill(notif == .activatedAI ? Color.neonGreen : Color.neonRed)
+                        .frame(width: 7, height: 7)
+                        .shadow(color: (notif == .activatedAI ? Color.neonGreen : Color.neonRed).opacity(0.9), radius: 6)
+                    
+                    Text(notif == .activatedAI ? "AI ACTIVE" : "PANIC MODE")
+                        .font(.system(size: 11, weight: .black, design: .monospaced))
+                        .tracking(1.5)
+                        .foregroundColor(.white)
+                }
+                .padding(.horizontal, 14)
+                .padding(.vertical, 7)
+                .background(.ultraThinMaterial)
+                .background(Color.black.opacity(0.65))
+                .clipShape(Capsule())
+                .overlay(
+                    Capsule()
+                        .stroke(
+                            LinearGradient(
+                                colors: [(notif == .activatedAI ? Color.neonGreen : Color.neonRed).opacity(0.6), Color.white.opacity(0.1)],
+                                startPoint: .topLeading,
+                                endPoint: .bottomTrailing
+                            ),
+                            lineWidth: 1
+                        )
+                )
+                .shadow(color: (notif == .activatedAI ? Color.neonGreen : Color.neonRed).opacity(0.3), radius: 12)
+                .transition(.asymmetric(insertion: .scale(scale: 0.8).combined(with: .opacity), removal: .opacity))
+            } else if isAIActive {
+                // Dyskretny status aktywnego asystenta
+                HStack(spacing: 6) {
+                    Circle()
+                        .fill(Color.neonGreen)
+                        .frame(width: 5, height: 5)
+                        .shadow(color: Color.neonGreen.opacity(0.8), radius: 4)
+                    Text("AI")
+                        .font(.system(size: 9, weight: .bold, design: .monospaced))
+                        .foregroundColor(.white.opacity(0.7))
+                }
+                .padding(.horizontal, 8)
+                .padding(.vertical, 4)
+                .background(.ultraThinMaterial)
+                .background(Color.black.opacity(0.4))
+                .clipShape(Capsule())
+                .overlay(
+                    Capsule()
+                        .stroke(Color.neonGreen.opacity(0.3), lineWidth: 0.5)
+                )
+                .transition(.opacity)
+            }
+        }
+        .animation(.spring(response: 0.35, dampingFraction: 0.7), value: activeNotification)
+        .animation(.easeInOut(duration: 0.3), value: isAIActive)
+    }
+    
+    // MARK: - 2026 Floating Dock
+    
+    private var floatingDock: some View {
+        HStack(spacing: 8) {
+            // Back Button
+            dockButton(icon: "chevron.left", disabled: activeTab?.webView.canGoBack != true) {
                 activeTab?.webView.goBack()
             }
             
-            // Forward
-            toolbarButton(icon: "chevron.right", disabled: activeTab?.webView.canGoForward != true) {
+            // Forward Button
+            dockButton(icon: "chevron.right", disabled: activeTab?.webView.canGoForward != true) {
                 activeTab?.webView.goForward()
             }
             
-            // URL bar
-            urlBar
+            // Minimalist URL Capsule
+            urlCapsule
                 .frame(maxWidth: .infinity)
             
-            // Tab count
+            // Tabs Pill
             Button {
                 showTabManager = true
             } label: {
                 Text("\(tabs.count)")
-                    .font(.system(size: 12, weight: .bold, design: .monospaced))
-                    .foregroundColor(.mkAccent)
-                    .frame(width: 28, height: 28)
+                    .font(.system(size: 11, weight: .black, design: .monospaced))
+                    .foregroundColor(.white)
+                    .frame(width: 30, height: 30)
+                    .background(Color.white.opacity(0.07))
+                    .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
                     .overlay(
-                        RoundedRectangle(cornerRadius: 7)
-                            .stroke(Color.mkAccent, lineWidth: 1.5)
+                        RoundedRectangle(cornerRadius: 10, style: .continuous)
+                            .stroke(Color.white.opacity(0.12), lineWidth: 0.8)
                     )
             }
-            .padding(.horizontal, 6)
             
-            // Menu
-            toolbarButton(icon: "line.3.horizontal", disabled: false) {
+            // Settings / Features
+            dockButton(icon: "ellipsis", disabled: false) {
                 showFeatureMenu = true
             }
         }
-        .padding(.horizontal, 8)
+        .padding(.horizontal, 10)
         .padding(.vertical, 8)
-        .background(
-            Color.mkSurface
-                .overlay(
-                    Rectangle()
-                        .frame(height: 0.5)
-                        .foregroundColor(Color.white.opacity(0.08)),
-                    alignment: .top
+        .background(.ultraThinMaterial)
+        .background(Color.glassSurface)
+        .clipShape(RoundedRectangle(cornerRadius: 26, style: .continuous))
+        .overlay(
+            RoundedRectangle(cornerRadius: 26, style: .continuous)
+                .stroke(
+                    LinearGradient(
+                        colors: [Color.white.opacity(0.18), Color.neonCyan.opacity(0.2), Color.white.opacity(0.04)],
+                        startPoint: .topLeading,
+                        endPoint: .bottomTrailing
+                    ),
+                    lineWidth: 1
                 )
         )
+        .shadow(color: Color.black.opacity(0.4), radius: 16, x: 0, y: 6)
     }
     
-    private func toolbarButton(icon: String, disabled: Bool, action: @escaping () -> Void) -> some View {
+    private func dockButton(icon: String, disabled: Bool, action: @escaping () -> Void) -> some View {
         Button(action: action) {
             Image(systemName: icon)
-                .font(.system(size: 17, weight: .medium))
-                .foregroundColor(disabled ? Color.mkTextSecondary.opacity(0.3) : .mkTextPrimary)
-                .frame(width: 40, height: 40)
+                .font(.system(size: 14, weight: .semibold))
+                .foregroundColor(disabled ? Color.textMuted.opacity(0.3) : .textBright)
+                .frame(width: 32, height: 32)
+                .background(Color.white.opacity(0.04))
+                .clipShape(Circle())
         }
         .disabled(disabled)
     }
     
-    // MARK: - URL Bar
+    // MARK: - URL Capsule
     
-    private var urlBar: some View {
+    private var urlCapsule: some View {
         HStack(spacing: 6) {
             if !isEditingURL {
-                Image(systemName: "lock.fill")
-                    .font(.system(size: 10))
-                    .foregroundColor(.mkGreen)
+                Image(systemName: "lock.shield.fill")
+                    .font(.system(size: 9))
+                    .foregroundColor(.neonCyan)
             }
             
             if isEditingURL {
-                TextField("Wpisz adres lub szukaj...", text: $urlInput, onCommit: {
+                TextField("Wpisz adres...", text: $urlInput, onCommit: {
                     loadURL(urlInput)
                     isEditingURL = false
                 })
-                .font(.system(size: 13, design: .monospaced))
-                .foregroundColor(.mkTextPrimary)
+                .font(.system(size: 12, design: .monospaced))
+                .foregroundColor(.white)
                 .keyboardType(.URL)
                 .autocapitalization(.none)
                 .disableAutocorrection(true)
             } else {
                 Text(displayHost)
-                    .font(.system(size: 13, design: .monospaced))
-                    .foregroundColor(.mkTextSecondary)
+                    .font(.system(size: 12, weight: .medium, design: .monospaced))
+                    .foregroundColor(.textMuted)
                     .lineLimit(1)
                     .onTapGesture {
                         isEditingURL = true
@@ -253,17 +403,17 @@ struct ContentView: View {
                     isEditingURL = false
                 } label: {
                     Image(systemName: "xmark.circle.fill")
-                        .font(.system(size: 14))
-                        .foregroundColor(.mkTextSecondary)
+                        .font(.system(size: 12))
+                        .foregroundColor(.textMuted)
                 }
             }
         }
         .padding(.horizontal, 10)
-        .padding(.vertical, 7)
-        .background(.ultraThinMaterial)
-        .clipShape(RoundedRectangle(cornerRadius: 10))
+        .padding(.vertical, 6)
+        .background(Color.white.opacity(0.05))
+        .clipShape(Capsule())
         .overlay(
-            RoundedRectangle(cornerRadius: 10)
+            Capsule()
                 .stroke(Color.white.opacity(0.08), lineWidth: 0.5)
         )
     }
@@ -275,61 +425,15 @@ struct ContentView: View {
         return host
     }
     
-    // MARK: - FAB
+    // MARK: - Actions & Toggles
     
-    private var fabButton: some View {
-        Button {
+    private func toggleAIState() {
+        if isAIActive {
+            triggerPanicMode()
+        } else {
             triggerAIAnalysis()
-        } label: {
-            ZStack {
-                Circle()
-                    .fill(
-                        LinearGradient(
-                            colors: [.mkAccent, .mkPurple],
-                            startPoint: .topLeading,
-                            endPoint: .bottomTrailing
-                        )
-                    )
-                    .frame(width: 52, height: 52)
-                    .shadow(color: .mkAccent.opacity(0.4), radius: fabPulse ? 14 : 6, x: 0, y: 4)
-                
-                Image(systemName: "sparkles")
-                    .font(.system(size: 22, weight: .semibold))
-                    .foregroundColor(.white)
-            }
-            .scaleEffect(fabPulse ? 1.08 : 1.0)
         }
     }
-    
-    private func startFabPulse() {
-        withAnimation(.easeInOut(duration: 1.6).repeatForever(autoreverses: true)) {
-            fabPulse = true
-        }
-    }
-    
-    // MARK: - Notification Badge
-    
-    private func notificationBadge(_ notification: NotificationState) -> some View {
-        HStack(spacing: 6) {
-            Circle()
-                .fill(notification == .activatedAI ? Color.mkGreen : Color.mkRed)
-                .frame(width: 8, height: 8)
-                .shadow(color: (notification == .activatedAI ? Color.mkGreen : Color.mkRed).opacity(0.8), radius: 4)
-            Text(notification == .activatedAI ? "Włączone" : "Wyłączone")
-                .font(.system(size: 11, weight: .bold, design: .rounded))
-                .foregroundColor(.white)
-        }
-        .padding(.horizontal, 10)
-        .padding(.vertical, 5)
-        .background(.ultraThinMaterial)
-        .background(Color.black.opacity(0.5))
-        .cornerRadius(12)
-        .padding(.top, 10)
-        .padding(.trailing, 10)
-        .allowsHitTesting(false)
-    }
-    
-    // MARK: - Actions
 
     private func loadURL(_ targetURL: String) {
         var formatted = targetURL.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -349,10 +453,10 @@ struct ContentView: View {
 
     private func triggerAIAnalysis() {
         isAIActive = true
-        UIImpactFeedbackGenerator(style: .light).impactOccurred()
+        UIImpactFeedbackGenerator(style: .medium).impactOccurred()
         showNotification(.activatedAI)
         if let tab = activeTab {
-            tab.statusMessage = "Wywoływanie AI..."
+            tab.statusMessage = "Analizuję pytanie..."
             StealthWebView.triggerAIAnalysis(webView: tab.webView)
         }
     }
@@ -362,7 +466,7 @@ struct ContentView: View {
         UINotificationFeedbackGenerator().notificationOccurred(.warning)
         showNotification(.deactivatedPanic)
         if let tab = activeTab {
-            tab.statusMessage = "TRYB NAUCZYCIEL PATRZY"
+            tab.statusMessage = "TRYB DYSKRETNY"
             StealthWebView.triggerPanicMode(webView: tab.webView)
         }
     }
@@ -371,7 +475,7 @@ struct ContentView: View {
         withAnimation(.spring(response: 0.35, dampingFraction: 0.7)) {
             activeNotification = state
         }
-        DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) {
+        DispatchQueue.main.asyncAfter(deadline: .now() + 1.2) {
             withAnimation(.easeInOut(duration: 0.3)) {
                 if activeNotification == state {
                     activeNotification = nil
@@ -381,7 +485,7 @@ struct ContentView: View {
     }
 }
 
-// MARK: - Feature Menu View
+// MARK: - 2026 Feature Menu View
 
 struct FeatureMenuView: View {
     @Environment(\.dismiss) var dismiss
@@ -391,18 +495,17 @@ struct FeatureMenuView: View {
     var body: some View {
         NavigationView {
             ZStack {
-                Color.mkNavy.ignoresSafeArea()
+                Color.oledBlack.ignoresSafeArea()
                 
                 ScrollView {
                     VStack(spacing: 16) {
-                        // Actions section
-                        sectionHeader("Akcje")
+                        sectionHeader("Sterowanie Asystentem")
                         
                         featureCard(
-                            icon: "sparkles",
-                            iconColor: .mkAccent,
-                            title: "Wyznacz Odpowiedź (AI Solve)",
-                            subtitle: "Głośność w dół x2 / Dwu-klik prawy róg"
+                            icon: "bolt.fill",
+                            iconColor: .neonCyan,
+                            title: "Przełącznik Asystenta (Włącz / Wyłącz)",
+                            subtitle: "2x głośność w dół lub dwu-klik dolnego paska"
                         ) {
                             dismiss()
                             triggerAI()
@@ -410,32 +513,31 @@ struct FeatureMenuView: View {
                         
                         featureCard(
                             icon: "eye.slash.fill",
-                            iconColor: .mkRed,
-                            title: "Tryb 'Nauczyciel Patrzy' (Panic Mode)",
-                            subtitle: "Głośność w górę x2 / Dwu-klik lewy róg"
+                            iconColor: .neonRed,
+                            title: "Natychmiastowy Panic Mode",
+                            subtitle: "2x głośność w górę (czyszczenie i blokada)"
                         ) {
                             dismiss()
-                            triggerPanicMode()
+                            triggerPanic()
                         }
                         
-                        // Quick links section
-                        sectionHeader("Szybkie Zakładki")
+                        sectionHeader("Portale Egzaminacyjne")
                         
-                        quickLink(icon: "checkmark.shield.fill", color: .mkGreen, title: "Testportal.pl", url: "https://www.testportal.pl")
-                        quickLink(icon: "magnifyingglass", color: .mkAccent, title: "Google Search", url: "https://www.google.com")
-                        quickLink(icon: "cpu", color: .mkPurple, title: "ChatGPT Portal", url: "https://chatgpt.com")
+                        quickLink(icon: "checkmark.shield.fill", color: .neonGreen, title: "Testportal.pl", url: "https://www.testportal.pl")
+                        quickLink(icon: "magnifyingglass", color: .neonCyan, title: "Google", url: "https://www.google.com")
+                        quickLink(icon: "brain.head.profile", color: .neonPurple, title: "Google AI Studio (Darmowy klucz Gemini)", url: "https://aistudio.google.com/app/apikey")
                     }
                     .padding(16)
                 }
             }
-            .navigationTitle("Funkcje")
+            .navigationTitle("Centrum Operacyjne")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .confirmationAction) {
-                    Button("Zamknij") {
+                    Button("Gotowe") {
                         dismiss()
                     }
-                    .foregroundColor(.mkAccent)
+                    .foregroundColor(.neonCyan)
                 }
             }
         }
@@ -445,43 +547,47 @@ struct FeatureMenuView: View {
     private func sectionHeader(_ title: String) -> some View {
         HStack {
             Text(title.uppercased())
-                .font(.system(size: 11, weight: .bold, design: .rounded))
-                .foregroundColor(.mkTextSecondary)
-                .tracking(1.2)
+                .font(.system(size: 11, weight: .bold, design: .monospaced))
+                .foregroundColor(.textMuted)
+                .tracking(1.4)
             Spacer()
         }
-        .padding(.top, 8)
+        .padding(.top, 6)
     }
     
     private func featureCard(icon: String, iconColor: Color, title: String, subtitle: String, action: @escaping () -> Void) -> some View {
         Button(action: action) {
             HStack(spacing: 14) {
                 Image(systemName: icon)
-                    .font(.system(size: 20))
+                    .font(.system(size: 18))
                     .foregroundColor(iconColor)
-                    .frame(width: 40, height: 40)
-                    .background(iconColor.opacity(0.15))
-                    .clipShape(RoundedRectangle(cornerRadius: 10))
+                    .frame(width: 42, height: 42)
+                    .background(iconColor.opacity(0.12))
+                    .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 14, style: .continuous)
+                            .stroke(iconColor.opacity(0.25), lineWidth: 0.8)
+                    )
                 
-                VStack(alignment: .leading, spacing: 2) {
+                VStack(alignment: .leading, spacing: 3) {
                     Text(title)
-                        .font(.system(size: 15, weight: .semibold))
-                        .foregroundColor(.mkTextPrimary)
+                        .font(.system(size: 14, weight: .semibold))
+                        .foregroundColor(.white)
                     Text(subtitle)
-                        .font(.system(size: 12))
-                        .foregroundColor(.mkTextSecondary)
+                        .font(.system(size: 11))
+                        .foregroundColor(.textMuted)
                 }
                 Spacer()
                 Image(systemName: "chevron.right")
-                    .font(.system(size: 13, weight: .semibold))
-                    .foregroundColor(.mkTextSecondary.opacity(0.5))
+                    .font(.system(size: 12, weight: .semibold))
+                    .foregroundColor(.textMuted.opacity(0.4))
             }
             .padding(14)
-            .background(Color.mkSurface)
-            .clipShape(RoundedRectangle(cornerRadius: 14))
+            .background(Color.glassSurface)
+            .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
             .overlay(
-                RoundedRectangle(cornerRadius: 14)
-                    .stroke(Color.white.opacity(0.06), lineWidth: 0.5)
+                RoundedRectangle(cornerRadius: 18, style: .continuous)
+                    .stroke(Color.white.opacity(0.08), lineWidth: 0.5)
             )
         }
     }
@@ -490,32 +596,28 @@ struct FeatureMenuView: View {
         Link(destination: URL(string: url)!) {
             HStack(spacing: 14) {
                 Image(systemName: icon)
-                    .font(.system(size: 16))
+                    .font(.system(size: 15))
                     .foregroundColor(color)
                     .frame(width: 36, height: 36)
-                    .background(color.opacity(0.12))
-                    .clipShape(RoundedRectangle(cornerRadius: 8))
+                    .background(color.opacity(0.1))
+                    .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
                 
                 Text(title)
-                    .font(.system(size: 14, weight: .medium))
-                    .foregroundColor(.mkTextPrimary)
+                    .font(.system(size: 13, weight: .medium))
+                    .foregroundColor(.white)
                 
                 Spacer()
                 Image(systemName: "arrow.up.right")
-                    .font(.system(size: 11, weight: .bold))
-                    .foregroundColor(.mkTextSecondary.opacity(0.4))
+                    .font(.system(size: 10, weight: .bold))
+                    .foregroundColor(.textMuted.opacity(0.4))
             }
             .padding(12)
-            .background(Color.mkSurface)
-            .clipShape(RoundedRectangle(cornerRadius: 12))
+            .background(Color.glassSurface)
+            .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
             .overlay(
-                RoundedRectangle(cornerRadius: 12)
+                RoundedRectangle(cornerRadius: 14, style: .continuous)
                     .stroke(Color.white.opacity(0.06), lineWidth: 0.5)
             )
         }
-    }
-
-    private func triggerPanicMode() {
-        triggerPanic()
     }
 }

@@ -1,8 +1,8 @@
 {
-  "version": "1.1.4",
+  "version": "1.1.5",
   "downloadUrl": "https://github.com/spr1nc1k/Makarena/releases/latest",
   "manifestUrl": "",
-  "changelog": "v1.1.4: Tryb przełącznika asysty AI (włączenie 2x ciszej działa trwale między przeładowaniami pytań), dynamiczna rotacja adresów IP omijająca limity 30s Pollinations, pełna obsługa pytań wielokrotnego wyboru (wyznaczanie wielu poprawnych odpowiedzi), poprawiona ewaluacja Prawda/Fałsz.",
+  "changelog": "v1.1.5: Nowy interfejs 2026 (pływający dock szklany, dynamiczna kapsuła statusowa), usunięto przycisk FAB, 2x głośność w dół to natychmiastowy przełącznik WŁĄCZ/WYŁĄCZ, dodano animowany splash screen z logo White Solution, oczyszczono komunikację AI z niepotrzebnych nagłówków i zoptymalizowano kalkulator heurystyczny (obsługa sekwencji liter i średniej arytmetycznej).",
   "scripts": {
     "testportalBypass": "https://raw.githubusercontent.com/spr1nc1k/Makarena/main/Scripts/testportal_bypass.js",
     "aiInjector": "https://raw.githubusercontent.com/spr1nc1k/Makarena/main/Scripts/ai_injector.js"
