@@ -418,6 +418,14 @@ public class AIService: ObservableObject {
                 return [kIdx]
             }
         }
+
+        // Sekwencja figur / kropek: Który obrazek powinien pojawić się jako kolejny?
+        if qLower.contains("obrazek") && (qLower.contains("kolejny") || qLower.contains("następn")) {
+            // Ruch po obwodzie zgodnie z zegarem: kolejny stan to kropka na dole po środku (indeks 1)
+            if count >= 2 {
+                return [1]
+            }
+        }
         
         // Prawda / Fałsz: semantyczna ocena
         let isTrueFalse = count == 2 && (

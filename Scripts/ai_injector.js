@@ -87,8 +87,18 @@
 
         containers.forEach((el) => {
             let text = el.innerText ? el.innerText.trim() : el.textContent ? el.textContent.trim() : '';
-            if (text && text.length < 300 && !options.some(o => o.text === text)) {
-                options.push({ id: options.length, text: text });
+            const img = el.querySelector('img');
+            const imgUrl = img ? img.src : null;
+
+            if (text && text.length < 300) {
+                if (!options.some(o => o.text === text)) {
+                    options.push({ id: options.length, text: text, imageUrl: imgUrl });
+                    resolvedContainers.push(el);
+                }
+            } else if (img) {
+                // Wariant graficzny bez tekstu (np. zadania z sekwencjami figur / obrazkami)
+                const label = 'Opcja ' + (options.length + 1);
+                options.push({ id: options.length, text: label, imageUrl: imgUrl, isImageOnly: true });
                 resolvedContainers.push(el);
             }
         });
@@ -196,13 +206,36 @@
             }
             node = walker.nextNode();
         }
+
+        // 3. Jeśli brak tekstu (opcja jest czystą grafiką/obrazkiem)
+        const optImg = targetElement.querySelector('img') || (targetElement.tagName === 'IMG' ? targetElement : null);
+        if (optImg) {
+            const origOutline = optImg.style.outline;
+            const origShadow = optImg.style.boxShadow;
+            isProcessing = true;
+            optImg.style.outline = '3px solid #26C6FF';
+            optImg.style.boxShadow = '0 0 12px rgba(38, 198, 255, 0.7)';
+            optImg.style.borderRadius = '6px';
+            isProcessing = false;
+            modifiedNodes.push({
+                element: optImg,
+                revert: function() {
+                    optImg.style.outline = origOutline;
+                    optImg.style.boxShadow = origShadow;
+                }
+            });
+            targetElement.setAttribute('data-makarena-marked', '1');
+            return;
+        }
     }
 
     // Cofnięcie modyfikacji DOM
     function revertModifications() {
         isProcessing = true;
         modifiedNodes.forEach(item => {
-            if (item.element && item.originalHTML) {
+            if (item.revert) {
+                try { item.revert(); } catch(e) {}
+            } else if (item.element && item.originalHTML) {
                 item.element.innerHTML = item.originalHTML;
                 const parent = item.element.closest('[data-makarena-marked]');
                 if (parent) parent.removeAttribute('data-makarena-marked');
