@@ -154,12 +154,12 @@ struct ContentView: View {
         ZStack {
             Color.oledBlack.ignoresSafeArea()
             
-            // Neon Ambient Glow
+            // Monochrome Ambient Specular Glow
             RadialGradient(
-                colors: [Color.neonCyan.opacity(0.18), Color.neonPurple.opacity(0.08), Color.clear],
+                colors: [Color.white.opacity(0.08), Color.white.opacity(0.02), Color.clear],
                 center: .center,
                 startRadius: 20,
-                endRadius: 300
+                endRadius: 280
             )
             .ignoresSafeArea()
             
@@ -170,11 +170,11 @@ struct ContentView: View {
                         .resizable()
                         .scaledToFit()
                         .frame(maxWidth: 260, maxHeight: 150)
-                        .shadow(color: .neonCyan.opacity(splashGlow ? 0.8 : 0.2), radius: splashGlow ? 28 : 10)
+                        .shadow(color: Color.white.opacity(splashGlow ? 0.35 : 0.08), radius: splashGlow ? 24 : 8)
                 } else {
                     Image(systemName: "bolt.shield.fill")
                         .font(.system(size: 68, weight: .ultraLight))
-                        .foregroundColor(.neonCyan)
+                        .foregroundColor(.white)
                 }
                 
                 VStack(spacing: 6) {
@@ -186,23 +186,17 @@ struct ContentView: View {
                     Text("STEALTH RUNTIME 2026")
                         .font(.system(size: 10, weight: .bold, design: .monospaced))
                         .tracking(3)
-                        .foregroundColor(.neonCyan)
+                        .foregroundColor(Color.white.opacity(0.65))
                 }
                 
-                // Micro-loader capsule
+                // Micro-loader capsule (pure monochrome)
                 ZStack(alignment: .leading) {
                     Capsule()
-                        .fill(Color.white.opacity(0.08))
+                        .fill(Color.white.opacity(0.12))
                         .frame(width: 140, height: 3)
                     
                     Capsule()
-                        .fill(
-                            LinearGradient(
-                                colors: [.neonCyan, .neonPurple],
-                                startPoint: .leading,
-                                endPoint: .trailing
-                            )
-                        )
+                        .fill(Color.white)
                         .frame(width: splashGlow ? 140 : 20, height: 3)
                 }
             }
@@ -217,11 +211,11 @@ struct ContentView: View {
     }
     
     private func startSplashAnimation() {
-        withAnimation(.easeOut(duration: 0.9)) {
+        withAnimation(.easeOut(duration: 1.0)) {
             splashScale = 1.0
             splashGlow = true
         }
-        DispatchQueue.main.asyncAfter(deadline: .now() + 1.8) {
+        DispatchQueue.main.asyncAfter(deadline: .now() + 3.0) {
             dismissSplash()
         }
     }
