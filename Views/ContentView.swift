@@ -183,7 +183,7 @@ struct ContentView: View {
                         .tracking(6)
                         .foregroundColor(.white)
                     
-                    Text("STEALTH RUNTIME 2026")
+                    Text("I got you dawg")
                         .font(.system(size: 10, weight: .bold, design: .monospaced))
                         .tracking(3)
                         .foregroundColor(Color.white.opacity(0.65))
